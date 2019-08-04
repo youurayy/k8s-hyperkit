@@ -147,6 +147,10 @@ sudo hyperkit -A \
   -s 5,ahci-cd,$(pwd)/$ISO \
   -f "kexec,../$KERNEL,../$INITRD,$CMDLIN"
 
+# TODO determine why this doesn't work on (encrypted) APFS / why aren't .raw images shrinking
+# (may also be that deleted files aren't zeroes -- try to force zeroing of unlinked fs?)
+# fcntl(F_PUNCHHOLE) failed: host filesystem does not support sparse files: Operation not permitted
+
 # TODO redir to logfile
 }
 
