@@ -26,7 +26,7 @@ set -e
 BASEDIR=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 
 VERSION=18.04
-#VERSION=19.04
+# VERSION=19.04
 IMAGE=ubuntu-$VERSION-server-cloudimg-amd64
 IMAGEURL=http://cloud-images.ubuntu.com/releases/server/$VERSION/release
 KERNEL="$IMAGE-vmlinuz-generic"
@@ -94,7 +94,8 @@ users:
     sudo: [ 'ALL=(ALL) NOPASSWD:ALL' ]
     groups: [ sudo, docker ]
     shell: /bin/bash
-
+    lock_passwd: false
+    passwd: '\$6\$rounds=4096\$byY3nxArmvpvOrpV\$2M4C8fh3ZXx10v91yzipFRng1EFXTRNDE3q9PvxiPc3kC7N/NHG8HiwAvhd7QjMgZAXOsuBD5nOs0AJkByYmf/' # 'test'
 write_files:
   - path: /etc/resolv.conf
     content: |
@@ -122,25 +123,25 @@ apt:
       keyid: BA07F4FB
       file: kubernetes.list
 
-package_upgrade: true
+# package_upgrade: true
 
-packages:
-  - linux-tools-virtual
-  - linux-cloud-tools-virtual
-  - docker.io
-  - kubelet
-  - kubectl
-  - kubeadm
+# packages:
+#   - linux-tools-virtual
+#   - linux-cloud-tools-virtual
+#   - docker.io
+#   - kubelet
+#   - kubectl
+#   - kubeadm
 
-runcmd:
-  # https://bugs.launchpad.net/ubuntu/+source/linux/+bug/1766857
-  - mkdir -p /usr/libexec/hypervkvpd && ln -s /usr/sbin/hv_get_dns_info /usr/sbin/hv_get_dhcp_info /usr/libexec/hypervkvpd
-  - systemctl enable docker
-  - systemctl enable kubelet
+# runcmd:
+#   # https://bugs.launchpad.net/ubuntu/+source/linux/+bug/1766857
+#   - mkdir -p /usr/libexec/hypervkvpd && ln -s /usr/sbin/hv_get_dns_info /usr/sbin/hv_get_dhcp_info /usr/libexec/hypervkvpd
+#   - systemctl enable docker
+#   - systemctl enable kubelet
 
-power_state:
-  timeout: 10
-  mode: poweroff
+# power_state:
+#   timeout: 10
+#   mode: poweroff
 
 EOF
 
@@ -164,9 +165,9 @@ BACKGROUND=
 # BACKGROUND='>> output.log 2>&1 &'
 
 cat << EOF > cmdline
+/Users/jurajvitko/github/hyperkit/build/\
 hyperkit -A \
   -H \
-  -P \
   -U $UUID \
   -m $RAM \
   -c $CPUS \
@@ -254,7 +255,7 @@ for arg in "$@"; do
     stop-all)
       proc_list "before:"
       go_to_scriptdir
-      sudo find tmp -name machine.pid -exec kill sh -c 'kill -SIGUSR1 $(cat $1)' sh {} ';'
+      sudo find tmp -name machine.pid -exec kill sh -c 'kill -TERM $(cat $1)' sh {} ';'
       proc_list "after:"
     ;;
     kill-all)
