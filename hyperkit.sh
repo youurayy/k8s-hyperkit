@@ -1,25 +1,6 @@
-# Kubernetes Cluster on Hyper-V
-# ---------------------------------
-# Practice real Kubernetes configurations on a local multi-node cluster.
-# Tested on: Hyperkit 0.20190802 on macOS 10.14.5 w/ APFS, guest images Ubuntu 18.04 and 19.04.
-
-# - try background kill
-# - try full cloud init
-# - try go from zero
-
-# PREPARATION
-#
-# brew install hyperkit qemu kubernetes-cli kubernetes-helm
-#
-#
-#
-#
-#
-#
-
-# NOTE the DHCP database is stored in (i.e. clean it when changing CIDRs or MACs): /var/db/dhcpd_leases
-# TODO fcntl(F_PUNCHHOLE) failed: host filesystem does not support sparse files: Operation not permitted
-# TODO generate random MACs if not present and store in a side file (plutil)
+#!/bin/bash
+# For usage overview, read the readme.md at https://github.com/youurayy/k8s-hyperkit
+# License: https://www.apache.org/licenses/LICENSE-2.0
 
 set -e
 
@@ -78,6 +59,9 @@ EOF
 # ssh_pwauth: True
 # EOF
 
+# TODO comment-out the password auth (and enable the rest + background) after things are sorted out
+
+
 cat << EOF > cidata/user-data
 #cloud-config
 
@@ -126,16 +110,12 @@ apt:
 # package_upgrade: true
 
 # packages:
-#   - linux-tools-virtual
-#   - linux-cloud-tools-virtual
 #   - docker.io
 #   - kubelet
 #   - kubectl
 #   - kubeadm
 
 # runcmd:
-#   # https://bugs.launchpad.net/ubuntu/+source/linux/+bug/1766857
-#   - mkdir -p /usr/libexec/hypervkvpd && ln -s /usr/sbin/hv_get_dns_info /usr/sbin/hv_get_dhcp_info /usr/libexec/hypervkvpd
 #   - systemctl enable docker
 #   - systemctl enable kubelet
 
@@ -210,8 +190,8 @@ EOF
 
 help()
 {
-  echo "use ./hyperkit.sh [install|create-vmnet|set-cidr|clean-dhcp]+"
-  echo "use ./hyperkit.sh [master|node1|node2|stop-all|kill-all|delete-nodes|info]+"
+  echo "use ./hyperkit.sh [install|create-vmnet|set-cidr|clean-dhcp|image]+"
+  echo "use ./hyperkit.sh [master|node1|node2|info|stop-all|kill-all|delete-nodes]+"
 }
 
 proc_list()
@@ -219,8 +199,6 @@ proc_list()
   echo $1
   ps auxw | grep hyperkit
 }
-
-download_image
 
 echo
 
@@ -244,6 +222,8 @@ for arg in "$@"; do
     clean-dhcp)
       echo | sudo tee /var/db/dhcpd_leases
     ;;
+    image)
+      download_image
     master)
       UUID=24AF0C19-3B96-487C-92F7-584C9932DD96 NAME=master CPUS=2 RAM=4G DISK=40G create_machine
     ;;
@@ -288,4 +268,3 @@ done
 echo
 
 go_to_scriptdir
-# ls -lR tmp
