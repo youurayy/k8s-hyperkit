@@ -12,4 +12,4 @@ Start by reading the [hyperkit.sh](hyperkit.sh) script.
 # TODO
 ```
 
-#### License: http://dbad-license.org/
+#### License: https://www.apache.org/licenses/LICENSE-2.0

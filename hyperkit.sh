@@ -1,14 +1,38 @@
+# Kubernetes Cluster on Hyper-V
+# ---------------------------------
+# Practice real Kubernetes configurations on a local multi-node cluster.
+# Tested on: Hyperkit 0.20190802 on macOS 10.14.5 w/ APFS, guest images Ubuntu 18.04 and 19.04.
+
+# - try background kill
+# - try full cloud init
+# - try go from zero
+
+# PREPARATION
+#
+# brew install hyperkit qemu kubernetes-cli kubernetes-helm
+#
+#
+#
+#
+#
+#
+
+# NOTE the DHCP database is stored in (i.e. clean it when changing CIDRs or MACs): /var/db/dhcpd_leases
+# TODO fcntl(F_PUNCHHOLE) failed: host filesystem does not support sparse files: Operation not permitted
+# TODO generate random MACs if not present and store in a side file (plutil)
 
 set -e
 
-# brew install hyperkit qemu
-
 BASEDIR=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 
-IMAGE=ubuntu-18.04-server-cloudimg-amd64
+VERSION=18.04
+#VERSION=19.04
+IMAGE=ubuntu-$VERSION-server-cloudimg-amd64
+IMAGEURL=http://cloud-images.ubuntu.com/releases/server/$VERSION/release
 KERNEL="$IMAGE-vmlinuz-generic"
 INITRD="$IMAGE-initrd-generic"
-IMAGEURL=http://cloud-images.ubuntu.com/releases/server/18.04/release
+
+CIDR="10.10.0.1"
 
 go_to_scriptdir()
 {
@@ -34,6 +58,8 @@ if [ -z $UUID ] || [ -z $NAME ] || [ -z $CPUS ] || [ -z $RAM ] || [ -z $DISK ]; 
   return
 fi
 
+echo "starting machine $NAME"
+
 go_to_scriptdir
 mkdir -p tmp/$NAME && cd tmp/$NAME
 
@@ -45,14 +71,14 @@ local-hostname: $NAME
 EOF
 
 # tmp test init
-cat << EOF > cidata/user-data
-#cloud-config
-password: test
-chpasswd: { expire: False }
-ssh_pwauth: True
-EOF
+# cat << EOF > cidata/user-data
+# #cloud-config
+# password: test
+# chpasswd: { expire: False }
+# ssh_pwauth: True
+# EOF
 
-cat << EOF > dummy
+cat << EOF > cidata/user-data
 #cloud-config
 
 mounts:
@@ -64,7 +90,7 @@ groups:
 users:
   - name: $USER
     ssh_authorized_keys:
-      - $(cat $HOME/.ssh/id_rsa.pub)
+      - '$(cat $HOME/.ssh/id_rsa.pub)'
     sudo: [ 'ALL=(ALL) NOPASSWD:ALL' ]
     groups: [ sudo, docker ]
     shell: /bin/bash
@@ -132,10 +158,15 @@ if ! [ -a $RAW ]; then
   qemu-img resize -f raw $RAW $DISK
 fi
 
-# /var/db/dhcpd_leases
-# /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
+# user for debug/tty:
+BACKGROUND=
+# use for prod/ssh:
+# BACKGROUND='>> output.log 2>&1 &'
 
-sudo hyperkit -A \
+cat << EOF > cmdline
+hyperkit -A \
+  -H \
+  -P \
   -U $UUID \
   -m $RAM \
   -c $CPUS \
@@ -145,28 +176,114 @@ sudo hyperkit -A \
   -l com1,stdio \
   -s 1:0,ahci-hd,$(pwd)/$IMAGE.raw \
   -s 5,ahci-cd,$(pwd)/$ISO \
-  -f "kexec,../$KERNEL,../$INITRD,$CMDLIN"
+  -f "kexec,../$KERNEL,../$INITRD,$CMDLIN" $BACKGROUND
+EOF
+chmod +x cmdline
 
-# TODO determine why this doesn't work on (encrypted) APFS / why aren't .raw images shrinking
-# (may also be that deleted files aren't zeroes -- try to force zeroing of unlinked fs?)
-# fcntl(F_PUNCHHOLE) failed: host filesystem does not support sparse files: Operation not permitted
+cat cmdline
+sudo ./cmdline
 
-# TODO redir to logfile
+if [ -z $BACKGROUND ]; then
+  rm -f machine.pid
+else
+  echo $! > machine.pid
+fi
 }
 
-# TODO pre-change vmnet CIDR (w/ warning)
-# TODO delete machine (kill first)
-# TODO hosts gen
+create-vmnet()
+{
+cat << EOF | sudo tee /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Shared_Net_Address</key>
+  <string>$CIDR</string>
+  <key>Shared_Net_Mask</key>
+  <string>255.255.255.0</string>
+</dict>
+</plist>
+EOF
+}
 
-# TODO create-machine --> launch-machine ?
-# TODO editable create/delete scripts which include hyperkit.sh ?
+help()
+{
+  echo "use ./hyperkit.sh [install|create-vmnet|set-cidr|clean-dhcp]+"
+  echo "use ./hyperkit.sh [master|node1|node2|stop-all|kill-all|delete-nodes|info]+"
+}
+
+proc_list()
+{
+  echo $1
+  ps auxw | grep hyperkit
+}
 
 download_image
 
-# use preset UUIDs to keep IP allocation across VM deletes
-UUID=24AF0C19-3B96-487C-92F7-584C9932DD96 NAME=master CPUS=2 RAM=4G DISK=50G create_machine
-#UUID=B0F97DC5-5E9F-40FC-B829-A1EF974F5640 NAME=node1 CPUS=2 RAM=4G DISK=50G create_machine
-#UUID=0BD5B90C-E00C-4E1B-B3CF-117D6FF3C09F NAME=node2 CPUS=2 RAM=4G DISK=50G create_machine
+echo
+
+if [ -z "$@" ]; then help; fi
+
+for arg in "$@"; do
+  case $arg in
+    install)
+      brew install hyperkit qemu kubernetes-cli kubernetes-helm
+    ;;
+    set-cidr)
+      sudo plutil \
+        -replace Shared_Net_Address \
+        -string $CIDR \
+        /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
+      sudo cat /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
+    ;;
+    create-vmnet)
+      create-vmnet
+    ;;
+    clean-dhcp)
+      echo | sudo tee /var/db/dhcpd_leases
+    ;;
+    master)
+      UUID=24AF0C19-3B96-487C-92F7-584C9932DD96 NAME=master CPUS=2 RAM=4G DISK=40G create_machine
+    ;;
+    node1)
+      UUID=B0F97DC5-5E9F-40FC-B829-A1EF974F5640 NAME=node1 CPUS=2 RAM=4G DISK=40G create_machine
+    ;;
+    node2)
+      UUID=0BD5B90C-E00C-4E1B-B3CF-117D6FF3C09F NAME=node2 CPUS=2 RAM=4G DISK=40G create_machine
+    ;;
+    stop-all)
+      proc_list "before:"
+      go_to_scriptdir
+      sudo find tmp -name machine.pid -exec kill sh -c 'kill -SIGUSR1 $(cat $1)' sh {} ';'
+      proc_list "after:"
+    ;;
+    kill-all)
+      go_to_scriptdir
+      proc_list "before:"
+      sudo find tmp -name machine.pid -exec kill sh -c 'kill -9 $(cat $1)' sh {} ';'
+      proc_list "after:"
+    ;;
+    delete-nodes)
+      go_to_scriptdir
+      cd tmp
+      rm -rf master node1 node2
+    ;;
+    info)
+      go_to_scriptdir
+      find tmp -name '*.raw' -exec du -h {} ';'
+      sudo find tmp -name machine.pid -exec sh -c 'echo $(dirname $1) is $(if kill -0 \
+        $(cat $1) > /dev/null 2>&1; then echo "RUNNING"; else echo "NOT RUNNING"; fi)' sh {} ';'
+    ;;
+    help)
+      help
+    ;;
+    *)
+      echo "unknown argument: $arg (try 'help')"
+    ;;
+  esac
+done
+
+echo
 
 go_to_scriptdir
 # ls -lR tmp
