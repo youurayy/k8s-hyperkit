@@ -164,8 +164,9 @@ BACKGROUND=
 # use for prod/ssh:
 # BACKGROUND='>> output.log 2>&1 &'
 
+#/Users/jurajvitko/github/hyperkit/build/\
+
 cat << EOF > cmdline
-/Users/jurajvitko/github/hyperkit/build/\
 hyperkit -A \
   -H \
   -U $UUID \
