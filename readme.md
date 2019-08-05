@@ -1,4 +1,4 @@
-# Kubernetes CLuster on Hyperkit
+# Kubernetes Cluster on Hyperkit
 
 Practice real Kubernetes configurations on a local multi-node cluster.
 
@@ -25,23 +25,24 @@ chmod +x hyperkit.sh
 code hyperkit.sh
 
 # performs `brew install hyperkit qemu kubernetes-cli kubernetes-helm`.
+# (qemu is necessary for `qemu-img`)
 # you may perform these manually / selectively instead.
 ./hyperkit.sh install
 
 # (optional)
 # replaces /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist,
 # while setting a new CIDR (by default 10.10.0.0/24) to avoid colliding with
-# defaults of Kubernetes Pod networking plugins.
+# default CIDRs of Kubernetes Pod networking plugins (Calico etc.).
 # (you should examine the vmnet.plist first to see if other apps are using it)
 ./hyperkit.sh create-vmnet
 
 # (optional)
 # only resets the CIDR in /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist,
-# while perserving the contents (the file must exist  / or is later auto-created).
+# while perserving the contents (the file must exist / or is later auto-created).
 ./hyperkit.sh set-cidr
 
 # (optional)
-# after changing your CIDR, you may want to delete MAC address associations in
+# after changing your CIDR, you may want to prune the MAC address associations in
 # the file /var/db/dhcpd_leases (the file must exist / or is later auto-created)
 ./hyperkit.sh clean-dhcp
 
