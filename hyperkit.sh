@@ -224,6 +224,7 @@ for arg in "$@"; do
     ;;
     image)
       download_image
+    ;;
     master)
       UUID=24AF0C19-3B96-487C-92F7-584C9932DD96 NAME=master CPUS=2 RAM=4G DISK=40G create_machine
     ;;
