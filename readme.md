@@ -4,8 +4,6 @@ Practice real Kubernetes configurations on a local multi-node cluster.
 
 Tested on: Hyperkit 0.20190802 on macOS 10.14.5 w/ APFS, guest images Ubuntu 18.04 and 19.04.
 
-Start by reading the [hyperkit.sh](hyperkit.sh) script.
-
 ## Changelog
 
 Current state: pre-release; TODO: k8s helm setup
@@ -34,6 +32,10 @@ code hyperkit.sh
 # while setting a new CIDR (by default 10.10.0.0/24) to avoid colliding with
 # default CIDRs of Kubernetes Pod networking plugins (Calico etc.).
 # (you should examine the vmnet.plist first to see if other apps are using it)
+# note: default CIDRs to avoid:
+# - Calico (192.168.0.0/16<->192.168.255.255)
+# - Weave Net (10.32.0.0/12<->10.47.255.255)
+# - Flannel (10.244.0.0/16<->10.244.255.255)
 ./hyperkit.sh create-vmnet
 
 # (optional)
