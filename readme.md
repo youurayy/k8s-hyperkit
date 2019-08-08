@@ -24,7 +24,7 @@ chmod +x hyperkit.sh
 # examine and customize the script, e.g.:
 code hyperkit.sh
 
-# performs `brew install hyperkit qemu md5sha1sum kubernetes-cli kubernetes-helm`.
+# performs `brew install hyperkit qemu kubernetes-cli kubernetes-helm`.
 # (qemu is necessary for `qemu-img`)
 # you may perform these manually / selectively instead.
 ./hyperkit.sh install
