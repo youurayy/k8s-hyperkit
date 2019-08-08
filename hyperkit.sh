@@ -5,44 +5,77 @@
 set -e
 
 BASEDIR=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
+CIDR="10.10.0"
 
 VERSION=18.04
 # VERSION=19.04
 IMAGE=ubuntu-$VERSION-server-cloudimg-amd64
-IMAGEURL=http://cloud-images.ubuntu.com/releases/server/$VERSION/release
+IMAGEURL=https://cloud-images.ubuntu.com/releases/server/$VERSION/release
 KERNEL="$IMAGE-vmlinuz-generic"
 INITRD="$IMAGE-initrd-generic"
+IMGTYPE="vmdk"
+# IMGTYPE="img" # does not work; https://github.com/moby/hyperkit/issues/258
 
-CIDR="10.10.0.1"
+CMDLINE="earlyprintk=serial console=ttyS0 root=/dev/sda1" # root=LABEL=cloudimg-rootfs
+ISO="cloud-init.iso"
+FORMAT="raw"
+FILEPREFIX=""
+DISKOPTS=""
 
-go_to_scriptdir()
+# FORMAT="qcow2"
+# FILEPREFIX="file://"
+# DISKOPTS=",format=qcow"
+
+DISKDEV="ahci-hd"
+# DISKDEV="virtio-blk"
+
+# user for debug/tty:
+# BACKGROUND=
+# use for prod/ssh:
+BACKGROUND='>> output.log 2>&1 &'
+
+
+go-to-scriptdir()
 {
 cd $BASEDIR
 }
 
-download_image()
+download-image()
 {
-go_to_scriptdir
+go-to-scriptdir
 mkdir -p tmp && cd tmp
-if ! [ -a $IMAGE.img ]; then
-  curl $IMAGEURL/$IMAGE.img -O
+if ! [ -a $IMAGE.$IMGTYPE ]; then
+  curl $IMAGEURL/$IMAGE.$IMGTYPE -O
   curl $IMAGEURL/unpacked/$KERNEL -O
   curl $IMAGEURL/unpacked/$INITRD -O
+  shasum -a 256 -c <(curl -s $IMAGEURL/SHA256SUMS | grep "$IMAGE.$IMGTYPE")
+  shasum -a 256 -c <(curl -s $IMAGEURL/unpacked/SHA256SUMS | grep "$KERNEL")
+  shasum -a 256 -c <(curl -s $IMAGEURL/unpacked/SHA256SUMS | grep "$INITRD")
 fi
 }
 
-create_machine()
+is-machine-running()
+{
+  ps -p $(cat $1/machine.pid 2> /dev/null) > /dev/null 2>&1
+}
+
+create-machine()
 {
 
 if [ -z $UUID ] || [ -z $NAME ] || [ -z $CPUS ] || [ -z $RAM ] || [ -z $DISK ]; then
-  echo "create_machine: invalid params"
+  echo "create-machine: invalid params"
   return
 fi
 
 echo "starting machine $NAME"
 
-go_to_scriptdir
+go-to-scriptdir
 mkdir -p tmp/$NAME && cd tmp/$NAME
+
+if is-machine-running ../$NAME; then
+  echo "machine is already running!"
+  return
+fi
 
 mkdir -p cidata
 
@@ -58,9 +91,6 @@ EOF
 # chpasswd: { expire: False }
 # ssh_pwauth: True
 # EOF
-
-# TODO comment-out the password auth (and enable the rest + background) after things are sorted out
-
 
 cat << EOF > cidata/user-data
 #cloud-config
@@ -79,7 +109,7 @@ users:
     groups: [ sudo, docker ]
     shell: /bin/bash
     lock_passwd: false
-    passwd: '\$6\$rounds=4096\$byY3nxArmvpvOrpV\$2M4C8fh3ZXx10v91yzipFRng1EFXTRNDE3q9PvxiPc3kC7N/NHG8HiwAvhd7QjMgZAXOsuBD5nOs0AJkByYmf/' # 'test'
+    # passwd: '\$6\$rounds=4096\$byY3nxArmvpvOrpV\$2M4C8fh3ZXx10v91yzipFRng1EFXTRNDE3q9PvxiPc3kC7N/NHG8HiwAvhd7QjMgZAXOsuBD5nOs0AJkByYmf/' # 'test'
 write_files:
   - path: /etc/resolv.conf
     content: |
@@ -107,44 +137,34 @@ apt:
       keyid: BA07F4FB
       file: kubernetes.list
 
-# package_upgrade: true
+package_upgrade: true
 
-# packages:
-#   - docker.io
-#   - kubelet
-#   - kubectl
-#   - kubeadm
+packages:
+  - docker.io
+  - kubelet
+  - kubectl
+  - kubeadm
 
-# runcmd:
-#   - systemctl enable docker
-#   - systemctl enable kubelet
+runcmd:
+  - systemctl enable docker
+  - systemctl enable kubelet
 
-# power_state:
-#   timeout: 10
-#   mode: poweroff
+power_state:
+  timeout: 10
+  mode: poweroff
 
 EOF
-
-CMDLIN="earlyprintk=serial console=ttyS0 root=/dev/sda1"
-ISO="cloud-init.iso"
 
 rm -f $ISO
 hdiutil makehybrid -iso -joliet -o $ISO cidata
 
-RAW="$IMAGE.raw"
+DISKFILE="$IMAGE.$FORMAT"
 
-if ! [ -a $RAW ]; then
-  echo Creating $(pwd)/$RAW
-  qemu-img convert -O raw ../$IMAGE.img $RAW
-  qemu-img resize -f raw $RAW $DISK
+if ! [ -a $DISKFILE ]; then
+  echo Creating $(pwd)/$DISKFILE
+  qemu-img convert -O $FORMAT ../$IMAGE.$IMGTYPE $DISKFILE
+  qemu-img resize -f $FORMAT $DISKFILE $DISK
 fi
-
-# user for debug/tty:
-BACKGROUND=
-# use for prod/ssh:
-# BACKGROUND='>> output.log 2>&1 &'
-
-#/Users/jurajvitko/github/hyperkit/build/\
 
 cat << EOF > cmdline
 hyperkit -A \
@@ -156,20 +176,32 @@ hyperkit -A \
   -s 2:0,virtio-net \
   -s 31,lpc \
   -l com1,stdio \
-  -s 1:0,ahci-hd,$(pwd)/$IMAGE.raw \
+  -s 1:0,$DISKDEV,$FILEPREFIX$(pwd)/$DISKFILE$DISKOPTS \
   -s 5,ahci-cd,$(pwd)/$ISO \
-  -f "kexec,../$KERNEL,../$INITRD,$CMDLIN" $BACKGROUND
+  -f "kexec,../$KERNEL,../$INITRD,$CMDLINE" $BACKGROUND
+echo \$! > machine.pid
 EOF
-chmod +x cmdline
 
+chmod +x cmdline
 cat cmdline
 sudo ./cmdline
 
-if [ -z $BACKGROUND ]; then
+if [ -z "$BACKGROUND" ]; then
   rm -f machine.pid
 else
-  echo $! > machine.pid
+  echo "started PID $(cat machine.pid)"
 fi
+}
+
+etc-hosts()
+{
+cat << EOF | sudo tee -a /etc/hosts
+
+$CIDR.2 master
+$CIDR.3 node1
+$CIDR.4 node2
+
+EOF
 }
 
 create-vmnet()
@@ -180,7 +212,7 @@ cat << EOF | sudo tee /Library/Preferences/SystemConfiguration/com.apple.vmnet.p
 <plist version="1.0">
 <dict>
   <key>Shared_Net_Address</key>
-  <string>$CIDR</string>
+  <string>$CIDR.1</string>
   <key>Shared_Net_Mask</key>
   <string>255.255.255.0</string>
 </dict>
@@ -190,19 +222,40 @@ EOF
 
 help()
 {
-  echo "use ./hyperkit.sh [install|create-vmnet|set-cidr|clean-dhcp|image]+"
-  echo "use ./hyperkit.sh [master|node1|node2|info|stop-all|kill-all|delete-nodes]+"
+  echo
+  echo "Practice real Kubernetes configurations on a local multi-node cluster."
+  echo "Inspect and optionally customize this script before use."
+  echo
+  echo "Usage: ./hyperkit.sh [ install | create-vmnet |set-cidr | etc-hosts | clean-dhcp | image "
+  echo "        master | node1 | node2 | info | stop-all | kill-all | delete-nodes ]+"
+  echo
+  echo "For more info, see: https://github.com/youurayy/k8s-hyperkit"
+  echo
 }
 
-proc_list()
+proc-list()
 {
   echo $1
   ps auxw | grep hyperkit
 }
 
+node-info()
+{
+  if is-machine-running $1; then
+    etc=$(ps uxw -p $(cat $1/machine.pid 2> /dev/null) 2> /dev/null | tail -n 1 | awk '{ printf("%s\t%s\t%s\t%s\t%s\t%s", $2, $3, $4, int($6/1024)"M", $9, $10); }')
+  else
+    etc='-\t-\t-\t-\t-\t-'
+  fi
+  name=$(basename $1)
+  disk=$(ls -lh $1/*.$FORMAT | awk '{print $5}')
+  sparse=$(du -h $1/*.$FORMAT | awk '{print $1}')
+  status=$(if is-machine-running $1; then echo "RUNNING"; else echo "NOT RUNNING"; fi)
+  echo -e "$name\\t$etc\\t$disk\\t$sparse\\t$status"
+}
+
 echo
 
-if [ -z "$@" ]; then help; fi
+if [ $# -eq 0 ]; then help; fi
 
 for arg in "$@"; do
   case $arg in
@@ -212,9 +265,12 @@ for arg in "$@"; do
     set-cidr)
       sudo plutil \
         -replace Shared_Net_Address \
-        -string $CIDR \
+        -string $CIDR.1 \
         /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
       sudo cat /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
+    ;;
+    etc-hosts)
+      etc-hosts
     ;;
     create-vmnet)
       create-vmnet
@@ -223,39 +279,33 @@ for arg in "$@"; do
       echo | sudo tee /var/db/dhcpd_leases
     ;;
     image)
-      download_image
+      download-image
     ;;
     master)
-      UUID=24AF0C19-3B96-487C-92F7-584C9932DD96 NAME=master CPUS=2 RAM=4G DISK=40G create_machine
+      UUID=24AF0C19-3B96-487C-92F7-584C9932DD96 NAME=master CPUS=2 RAM=4G DISK=40G create-machine
     ;;
     node1)
-      UUID=B0F97DC5-5E9F-40FC-B829-A1EF974F5640 NAME=node1 CPUS=2 RAM=4G DISK=40G create_machine
+      UUID=B0F97DC5-5E9F-40FC-B829-A1EF974F5640 NAME=node1 CPUS=2 RAM=4G DISK=40G create-machine
     ;;
     node2)
-      UUID=0BD5B90C-E00C-4E1B-B3CF-117D6FF3C09F NAME=node2 CPUS=2 RAM=4G DISK=40G create_machine
+      UUID=0BD5B90C-E00C-4E1B-B3CF-117D6FF3C09F NAME=node2 CPUS=2 RAM=4G DISK=40G create-machine
     ;;
     stop-all)
-      proc_list "before:"
-      go_to_scriptdir
-      sudo find tmp -name machine.pid -exec kill sh -c 'kill -TERM $(cat $1)' sh {} ';'
-      proc_list "after:"
+      go-to-scriptdir
+      sudo find tmp -name machine.pid -exec sh -c 'kill -TERM $(cat $1)' sh {} ';'
     ;;
     kill-all)
-      go_to_scriptdir
-      proc_list "before:"
-      sudo find tmp -name machine.pid -exec kill sh -c 'kill -9 $(cat $1)' sh {} ';'
-      proc_list "after:"
+      go-to-scriptdir
+      sudo find tmp -name machine.pid -exec sh -c 'kill -9 $(cat $1)' sh {} ';'
     ;;
     delete-nodes)
-      go_to_scriptdir
-      cd tmp
-      rm -rf master node1 node2
+      go-to-scriptdir
+      find ./tmp/* -maxdepth 0 -type d -exec rm -rf {} ';'
     ;;
     info)
-      go_to_scriptdir
-      find tmp -name '*.raw' -exec du -h {} ';'
-      sudo find tmp -name machine.pid -exec sh -c 'echo $(dirname $1) is $(if kill -0 \
-        $(cat $1) > /dev/null 2>&1; then echo "RUNNING"; else echo "NOT RUNNING"; fi)' sh {} ';'
+      go-to-scriptdir
+      { echo -e 'NAME\tPID\t%CPU\t%MEM\tRSS\tSTARTED\tTIME\tDISK\tSPARSE\tSTATUS' &
+      find ./tmp/* -maxdepth 0 -type d | while read node; do node-info "$node"; done } | column -ts $'\t'
     ;;
     help)
       help
@@ -268,4 +318,4 @@ done
 
 echo
 
-go_to_scriptdir
+go-to-scriptdir

@@ -8,7 +8,7 @@ Start by reading the [hyperkit.sh](hyperkit.sh) script.
 
 ## Changelog
 
-Current state: pre-release; solving https://github.com/moby/hyperkit/issues/258
+Current state: pre-release; TODO: k8s helm setup
 
 ## Example usage:
 
@@ -24,7 +24,7 @@ chmod +x hyperkit.sh
 # examine and customize the script, e.g.:
 code hyperkit.sh
 
-# performs `brew install hyperkit qemu kubernetes-cli kubernetes-helm`.
+# performs `brew install hyperkit qemu md5sha1sum kubernetes-cli kubernetes-helm`.
 # (qemu is necessary for `qemu-img`)
 # you may perform these manually / selectively instead.
 ./hyperkit.sh install
@@ -42,6 +42,13 @@ code hyperkit.sh
 ./hyperkit.sh set-cidr
 
 # (optional)
+# updates /etc/hosts with currently configured CIDR;
+# then you can use e.g. `ssh master` or `ssh node1` etc.
+# note: if your Mac's vmnet was already used with this CIDR, you will need to
+# adjust the /etc/hosts values manually (according to /var/db/dhcpd_leases).
+./hyperkit.sh etc-hosts
+
+# (optional)
 # after changing your CIDR, you may want to prune the MAC address associations in
 # the file /var/db/dhcpd_leases (the file must exist / or is later auto-created)
 ./hyperkit.sh clean-dhcp
@@ -56,16 +63,27 @@ code hyperkit.sh
 # ---- or -----
 ./hyperkit.sh master node1 node2
 
+# note: the initial cloud-config is set to power-down the nodes upon finish.
+# use the 'info' command to see when the nodes finished initializing, and
+# then run them again to setup k8s.
+# you can disable this behavior by commenting out the powerdown in the cloud-init config.
+
 # show info about existing VMs (size, run state)
 ./hyperkit.sh info
+
+NAME    PID    %CPU  %MEM  RSS   STARTED  TIME     DISK  SPARSE  STATUS
+master  36399  0.4   2.1   341M  3:51AM   0:26.30  40G   3.1G    RUNNING
+node1   36418  0.3   2.1   341M  3:51AM   0:25.59  40G   3.1G    RUNNING
+node2   37799  0.4   2.0   333M  3:56AM   0:16.78  40G   3.1G    RUNNING
 
 # ssh to the nodes and install basic Kubernetes cluster here.
 # IPs can be found in `/var/db/dhcpd_leases` mapped by MAC address.
 # by default, your `.ssh/id_rsa.pub` key was copied into the VMs' ~/.ssh/authorized_keys
-# use your host username, e.g.:
-ssh $USER@10.10.0.2
-ssh $USER@10.10.0.3
-ssh $USER@10.10.0.4
+# (note: this works only after `./hyperkit.sh etc-hosts`, otherwise use IP addresses)
+# use your host username (which is default), e.g.:
+ssh master
+ssh node1
+ssh node2
 
 # stop all nodes
 ./hyperkit.sh stop-all
@@ -75,6 +93,9 @@ ssh $USER@10.10.0.4
 
 # delete all nodes' data (will not delete image templates)
 ./hyperkit.sh delete-nodes
+
+# delete only a particular node
+rm -rf ./tmp/node1/
 
 # remove everything
 rm -rf ./tmp
