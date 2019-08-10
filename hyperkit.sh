@@ -2,10 +2,8 @@
 # For usage overview, read the readme.md at https://github.com/youurayy/k8s-hyperkit
 # License: https://www.apache.org/licenses/LICENSE-2.0
 
-set -e
 
-BASEDIR=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
-CIDR="10.10.0"
+# ---------------------------SETTINGS------------------------------------
 
 VERSION=18.04
 # VERSION=19.04
@@ -16,6 +14,7 @@ INITRD="$IMAGE-initrd-generic"
 IMGTYPE="vmdk"
 # IMGTYPE="img" # does not work; https://github.com/moby/hyperkit/issues/258
 
+CIDR="10.10.0"
 CMDLINE="earlyprintk=serial console=ttyS0 root=/dev/sda1" # root=LABEL=cloudimg-rootfs
 ISO="cloud-init.iso"
 FORMAT="raw"
@@ -34,14 +33,17 @@ DISKDEV="ahci-hd"
 # use for prod/ssh:
 BACKGROUND='>> output.log 2>&1 &'
 
+# ----------------------------------------------------------------------
 
-go-to-scriptdir()
-{
+set -e
+
+BASEDIR=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
+
+go-to-scriptdir() {
   cd $BASEDIR
 }
 
-download-image()
-{
+download-image() {
   go-to-scriptdir
   mkdir -p tmp && cd tmp
   if ! [ -a $IMAGE.$IMGTYPE ]; then
@@ -54,30 +56,28 @@ download-image()
   fi
 }
 
-is-machine-running()
-{
+is-machine-running() {
   ps -p $(cat $1/machine.pid 2> /dev/null) > /dev/null 2>&1
 }
 
-create-machine()
-{
+create-machine() {
 
-if [ -z $UUID ] || [ -z $NAME ] || [ -z $CPUS ] || [ -z $RAM ] || [ -z $DISK ]; then
-  echo "create-machine: invalid params"
-  return
-fi
+  if [ -z $UUID ] || [ -z $NAME ] || [ -z $CPUS ] || [ -z $RAM ] || [ -z $DISK ]; then
+    echo "create-machine: invalid params"
+    return
+  fi
 
-echo "starting machine $NAME"
+  echo "starting machine $NAME"
 
-go-to-scriptdir
-mkdir -p tmp/$NAME && cd tmp/$NAME
+  go-to-scriptdir
+  mkdir -p tmp/$NAME && cd tmp/$NAME
 
-if is-machine-running ../$NAME; then
-  echo "machine is already running!"
-  return
-fi
+  if is-machine-running ../$NAME; then
+    echo "machine is already running!"
+    return
+  fi
 
-mkdir -p cidata
+  mkdir -p cidata
 
 cat << EOF > cidata/meta-data
 instance-id: id-$NAME
@@ -173,16 +173,16 @@ EOF
 #  - docker-ce-cli
 #  - containerd.io
 
-rm -f $ISO
-hdiutil makehybrid -iso -joliet -o $ISO cidata
+  rm -f $ISO
+  hdiutil makehybrid -iso -joliet -o $ISO cidata
 
-DISKFILE="$IMAGE.$FORMAT"
+  DISKFILE="$IMAGE.$FORMAT"
 
-if ! [ -a $DISKFILE ]; then
-  echo Creating $(pwd)/$DISKFILE
-  qemu-img convert -O $FORMAT ../$IMAGE.$IMGTYPE $DISKFILE
-  qemu-img resize -f $FORMAT $DISKFILE $DISK
-fi
+  if ! [ -a $DISKFILE ]; then
+    echo Creating $(pwd)/$DISKFILE
+    qemu-img convert -O $FORMAT ../$IMAGE.$IMGTYPE $DISKFILE
+    qemu-img resize -f $FORMAT $DISKFILE $DISK
+  fi
 
 cat << EOF > cmdline
 hyperkit -A \
@@ -244,8 +244,8 @@ help()
   echo "Practice real Kubernetes configurations on a local multi-node cluster."
   echo "Inspect and optionally customize this script before use."
   echo
-  echo "Usage: ./hyperkit.sh [ install | create-vmnet |set-cidr | etc-hosts | clean-dhcp | image "
-  echo "        master | node1 | node2 | info | stop-all | kill-all | delete-nodes ]+"
+  echo "Usage: ./hyperkit.sh [ install | create-vmnet | cidr | hosts | clean-dhcp | image "
+  echo "        master | node1 | node2 | info | stop | kill | delete ]+"
   echo
   echo "For more info, see: https://github.com/youurayy/k8s-hyperkit"
   echo
@@ -280,14 +280,14 @@ for arg in "$@"; do
     install)
       brew install hyperkit qemu kubernetes-cli kubernetes-helm
     ;;
-    set-cidr)
+    cidr)
       sudo plutil \
         -replace Shared_Net_Address \
         -string $CIDR.1 \
         /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
       sudo cat /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
     ;;
-    etc-hosts)
+    hosts)
       etc-hosts
     ;;
     create-vmnet)
@@ -308,15 +308,15 @@ for arg in "$@"; do
     node2)
       UUID=0BD5B90C-E00C-4E1B-B3CF-117D6FF3C09F NAME=node2 CPUS=2 RAM=4G DISK=40G create-machine
     ;;
-    stop-all)
+    stop)
       go-to-scriptdir
       sudo find tmp -name machine.pid -exec sh -c 'kill -TERM $(cat $1)' sh {} ';'
     ;;
-    kill-all)
+    kill)
       go-to-scriptdir
       sudo find tmp -name machine.pid -exec sh -c 'kill -9 $(cat $1)' sh {} ';'
     ;;
-    delete-nodes)
+    delete)
       go-to-scriptdir
       find ./tmp/* -maxdepth 0 -type d -exec rm -rf {} ';'
     ;;
