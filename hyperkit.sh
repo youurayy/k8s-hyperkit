@@ -17,6 +17,7 @@ IMGTYPE="vmdk"
 CIDR="10.10.0"
 CMDLINE="earlyprintk=serial console=ttyS0 root=/dev/sda1" # root=LABEL=cloudimg-rootfs
 ISO="cloud-init.iso"
+
 FORMAT="raw"
 FILEPREFIX=""
 DISKOPTS=""
@@ -280,6 +281,12 @@ for arg in "$@"; do
     install)
       brew install hyperkit qemu kubernetes-cli kubernetes-helm
     ;;
+    config)
+      # TODO
+    ;;
+    net)
+      create-vmnet
+    ;;
     cidr)
       sudo plutil \
         -replace Shared_Net_Address \
@@ -289,9 +296,6 @@ for arg in "$@"; do
     ;;
     hosts)
       etc-hosts
-    ;;
-    create-vmnet)
-      create-vmnet
     ;;
     clean-dhcp)
       echo | sudo tee /var/db/dhcpd_leases

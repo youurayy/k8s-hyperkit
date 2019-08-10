@@ -27,16 +27,21 @@ code hyperkit.sh
 # you may perform these manually / selectively instead.
 ./hyperkit.sh install
 
+# display configured variables (edit the script to change them)
+./hyperkit.sh config
+
+# TODO
+
 # (optional)
 # replaces /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist,
-# while setting a new CIDR (by default 10.10.0.0/24) to avoid colliding with
+# while setting a new CIDR (by default 10.10.0.0/24) to avoid colliding with the
 # default CIDRs of Kubernetes Pod networking plugins (Calico etc.).
 # (you should examine the vmnet.plist first to see if other apps are using it)
-# note: default CIDRs to avoid:
+# default CIDRs to avoid:
 # - Calico (192.168.0.0/16<->192.168.255.255)
 # - Weave Net (10.32.0.0/12<->10.47.255.255)
 # - Flannel (10.244.0.0/16<->10.244.255.255)
-./hyperkit.sh create-vmnet
+./hyperkit.sh net
 
 # (optional)
 # only resets the CIDR in /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist,
