@@ -37,21 +37,21 @@ BACKGROUND='>> output.log 2>&1 &'
 
 go-to-scriptdir()
 {
-cd $BASEDIR
+  cd $BASEDIR
 }
 
 download-image()
 {
-go-to-scriptdir
-mkdir -p tmp && cd tmp
-if ! [ -a $IMAGE.$IMGTYPE ]; then
-  curl $IMAGEURL/$IMAGE.$IMGTYPE -O
-  curl $IMAGEURL/unpacked/$KERNEL -O
-  curl $IMAGEURL/unpacked/$INITRD -O
-  shasum -a 256 -c <(curl -s $IMAGEURL/SHA256SUMS | grep "$IMAGE.$IMGTYPE")
-  shasum -a 256 -c <(curl -s $IMAGEURL/unpacked/SHA256SUMS | grep "$KERNEL")
-  shasum -a 256 -c <(curl -s $IMAGEURL/unpacked/SHA256SUMS | grep "$INITRD")
-fi
+  go-to-scriptdir
+  mkdir -p tmp && cd tmp
+  if ! [ -a $IMAGE.$IMGTYPE ]; then
+    curl $IMAGEURL/$IMAGE.$IMGTYPE -O
+    curl $IMAGEURL/unpacked/$KERNEL -O
+    curl $IMAGEURL/unpacked/$INITRD -O
+    shasum -a 256 -c <(curl -s $IMAGEURL/SHA256SUMS | grep "$IMAGE.$IMGTYPE")
+    shasum -a 256 -c <(curl -s $IMAGEURL/unpacked/SHA256SUMS | grep "$KERNEL")
+    shasum -a 256 -c <(curl -s $IMAGEURL/unpacked/SHA256SUMS | grep "$INITRD")
+  fi
 }
 
 is-machine-running()
@@ -110,6 +110,7 @@ users:
     shell: /bin/bash
     # lock_passwd: false
     # passwd: '\$6\$rounds=4096\$byY3nxArmvpvOrpV\$2M4C8fh3ZXx10v91yzipFRng1EFXTRNDE3q9PvxiPc3kC7N/NHG8HiwAvhd7QjMgZAXOsuBD5nOs0AJkByYmf/' # 'test'
+
 write_files:
   - path: /etc/resolv.conf
     content: |
@@ -152,8 +153,25 @@ runcmd:
 power_state:
   timeout: 10
   mode: poweroff
-
 EOF
+
+# write_files:
+#   - path: /etc/apt/preferences.d/docker-pin
+#     content: |
+#       Package: *
+#       Pin: origin download.docker.com
+#       Pin-Priority: 600
+# apt:
+#   sources:
+#     docker.list:
+#       arches: amd64
+#       source: "deb https://download.docker.com/linux/ubuntu bionic stable"
+#       keyserver: "hkp://keyserver.ubuntu.com:80"
+#       keyid: 0EBFCD88
+# packages:
+#  - docker-ce
+#  - docker-ce-cli
+#  - containerd.io
 
 rm -f $ISO
 hdiutil makehybrid -iso -joliet -o $ISO cidata
