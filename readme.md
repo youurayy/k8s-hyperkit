@@ -24,6 +24,9 @@ chmod +x hyperkit.sh
 # examine and customize the script, e.g.:
 code hyperkit.sh
 
+# display short synopsis for the available commands
+./hyperkit.sh help
+
 # performs `brew install hyperkit qemu kubernetes-cli kubernetes-helm`.
 # (qemu is necessary for `qemu-img`)
 # you may perform these manually / selectively instead.
@@ -32,6 +35,7 @@ code hyperkit.sh
 # display configured variables (edit the script to change them)
 ./hyperkit.sh config
 '
+   WORKDIR: ./tmp
  GUESTUSER: name
    SSHPATH: /Users/name/.ssh/id_rsa.pub
   IMAGEURL: https://cloud-images.ubuntu.com/releases/server/19.04/release/ubuntu-19.04-server-cloudimg-amd64.vmdk

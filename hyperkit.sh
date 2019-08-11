@@ -5,13 +5,14 @@
 
 # ---------------------------SETTINGS------------------------------------
 
-GUESTUSER = $USER
-SSHPATH = "$HOME/.ssh/id_rsa.pub"
+WORKDIR=./tmp
+GUESTUSER=$USER
+SSHPATH="$HOME/.ssh/id_rsa.pub"
 if ! [ -a $SSHPATH ]; then
   echo -e "\\n please configure $sshpath or place a pubkey at $sshpath \\n"
   exit
-}
-SSHPUB = $(cat $SSHPATH)
+fi
+SSHPUB=$(cat $SSHPATH)
 
 VERSION=18.04
 # VERSION=19.04
@@ -58,7 +59,7 @@ go-to-scriptdir() {
 
 download-image() {
   go-to-scriptdir
-  mkdir -p tmp && cd tmp
+  mkdir -p $WORKDIR && cd $WORKDIR
   if ! [ -a $IMAGE.$IMGTYPE ]; then
     curl $IMAGEURL/$IMAGE.$IMGTYPE -O
     curl $IMAGEURL/unpacked/$KERNEL -O
@@ -83,7 +84,7 @@ create-machine() {
   echo "starting machine $NAME"
 
   go-to-scriptdir
-  mkdir -p tmp/$NAME && cd tmp/$NAME
+  mkdir -p $WORKDIR/$NAME && cd $WORKDIR/$NAME
 
   if is-machine-running ../$NAME; then
     echo "machine is already running!"
@@ -251,27 +252,40 @@ cat << EOF | sudo tee /Library/Preferences/SystemConfiguration/com.apple.vmnet.p
 EOF
 }
 
-help()
-{
-  echo
-  echo "Practice real Kubernetes configurations on a local multi-node cluster."
-  echo "Inspect and optionally customize this script before use."
-  echo
-  echo "Usage: ./hyperkit.sh [ install | net | cidr | hosts | clean-dhcp | image | "
-  echo "        master | node1 | node2 | info | stop | kill | delete ]+"
-  echo
-  echo "For more info, see: https://github.com/youurayy/k8s-hyperkit"
-  echo
+help() {
+cat << EOF
+  Practice real Kubernetes configurations on a local multi-node cluster.
+  Inspect and optionally customize this script before use.
+
+  Usage: ./hyperkit.sh command+
+
+  Commands:
+
+     install - install basic chocolatey packages
+      config - show script config vars
+       print - print contents of relevant config files
+         net - create or reset the vmnet config
+        cidr - update CIDR in the vmnet config
+       hosts - append node names to etc/hosts
+        dhcp - clean the dhcp registry
+       image - download the VM image
+      master - create and launch master node
+       nodeN - create and launch worker node (node1, node2, ...)
+        info - display info about nodes
+        stop - stop the VMs
+        kill - force-stop the VMs
+      delete - delete the VMs
+
+  For more info, see: https://github.com/youurayy/k8s-hyperkit
+EOF
 }
 
-proc-list()
-{
+proc-list() {
   echo $1
   ps auxw | grep hyperkit
 }
 
-node-info()
-{
+node-info() {
   if is-machine-running $1; then
     etc=$(ps uxw -p $(cat $1/machine.pid 2> /dev/null) 2> /dev/null | tail -n 1 | awk '{ printf("%s\t%s\t%s\t%s\t%s\t%s", $2, $3, $4, int($6/1024)"M", $9, $10); }')
   else
@@ -294,6 +308,7 @@ for arg in "$@"; do
       brew install hyperkit qemu kubernetes-cli kubernetes-helm
     ;;
     config)
+      echo "   WORKDIR: $WORKDIR"
       echo " GUESTUSER: $GUESTUSER"
       echo "   SSHPATH: $SSHPATH"
       echo "  IMAGEURL: $IMAGEURL/$IMAGE.$IMGTYPE"
@@ -302,6 +317,9 @@ for arg in "$@"; do
       echo "      CPUS: $CPUS"
       echo "       RAM: $RAM"
       echo "       HDD: $HDD"
+    ;;
+    print)
+      # TODO
     ;;
     net)
       create-vmnet
@@ -316,7 +334,7 @@ for arg in "$@"; do
     hosts)
       etc-hosts
     ;;
-    clean-dhcp)
+    dhcp)
       echo | sudo tee /var/db/dhcpd_leases
     ;;
     image)
@@ -331,22 +349,22 @@ for arg in "$@"; do
     node2)
       UUID=0BD5B90C-E00C-4E1B-B3CF-117D6FF3C09F NAME=node2 CPUS=$CPUS RAM=$RAM DISK=$HDD create-machine
     ;;
-    stop)
-      go-to-scriptdir
-      sudo find tmp -name machine.pid -exec sh -c 'kill -TERM $(cat $1)' sh {} ';'
-    ;;
-    kill)
-      go-to-scriptdir
-      sudo find tmp -name machine.pid -exec sh -c 'kill -9 $(cat $1)' sh {} ';'
-    ;;
-    delete)
-      go-to-scriptdir
-      find ./tmp/* -maxdepth 0 -type d -exec rm -rf {} ';'
-    ;;
     info)
       go-to-scriptdir
       { echo -e 'NAME\tPID\t%CPU\t%MEM\tRSS\tSTARTED\tTIME\tDISK\tSPARSE\tSTATUS' &
-      find ./tmp/* -maxdepth 0 -type d | while read node; do node-info "$node"; done } | column -ts $'\t'
+      find $WORKDIR/* -maxdepth 0 -type d | while read node; do node-info "$node"; done } | column -ts $'\t'
+    ;;
+    stop)
+      go-to-scriptdir
+      sudo find $WORKDIR -name machine.pid -exec sh -c 'kill -TERM $(cat $1)' sh {} ';'
+    ;;
+    kill)
+      go-to-scriptdir
+      sudo find $WORKDIR -name machine.pid -exec sh -c 'kill -9 $(cat $1)' sh {} ';'
+    ;;
+    delete)
+      go-to-scriptdir
+      find $WORKDIR/* -maxdepth 0 -type d -exec rm -rf {} ';'
     ;;
     help)
       help
