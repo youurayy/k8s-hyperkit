@@ -29,9 +29,16 @@ code hyperkit.sh
 
 # display configured variables (edit the script to change them)
 ./hyperkit.sh config
-
-# TODO
-
+'
+ GUESTUSER: name
+   SSHPATH: /Users/name/.ssh/id_rsa.pub
+  IMAGEURL: https://cloud-images.ubuntu.com/releases/server/19.04/release/ubuntu-19.04-server-cloudimg-amd64.vmdk
+  DISKFILE: ubuntu-19.04-server-cloudimg-amd64.raw
+      CIDR: 10.10.0.0/24
+      CPUS: 4
+       RAM: 4GB
+       HDD: 40GB
+'
 # (optional)
 # replaces /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist,
 # while setting a new CIDR (by default 10.10.0.0/24) to avoid colliding with the

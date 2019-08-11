@@ -5,6 +5,14 @@
 
 # ---------------------------SETTINGS------------------------------------
 
+GUESTUSER = $USER
+SSHPATH = "$HOME/.ssh/id_rsa.pub"
+if ! [ -a $SSHPATH ]; then
+  echo -e "\\n please configure $sshpath or place a pubkey at $sshpath \\n"
+  exit
+}
+SSHPUB = $(cat $SSHPATH)
+
 VERSION=18.04
 # VERSION=19.04
 IMAGE=ubuntu-$VERSION-server-cloudimg-amd64
@@ -17,6 +25,10 @@ IMGTYPE="vmdk"
 CIDR="10.10.0"
 CMDLINE="earlyprintk=serial console=ttyS0 root=/dev/sda1" # root=LABEL=cloudimg-rootfs
 ISO="cloud-init.iso"
+
+CPUS=4
+RAM=4GB
+HDD=40GB
 
 FORMAT="raw"
 FILEPREFIX=""
@@ -103,9 +115,9 @@ groups:
   - docker
 
 users:
-  - name: $USER
+  - name: $GUESTUSER
     ssh_authorized_keys:
-      - '$(cat $HOME/.ssh/id_rsa.pub)'
+      - '$SSHPUB'
     sudo: [ 'ALL=(ALL) NOPASSWD:ALL' ]
     groups: [ sudo, docker ]
     shell: /bin/bash
@@ -282,7 +294,14 @@ for arg in "$@"; do
       brew install hyperkit qemu kubernetes-cli kubernetes-helm
     ;;
     config)
-      # TODO
+      echo " GUESTUSER: $GUESTUSER"
+      echo "   SSHPATH: $SSHPATH"
+      echo "  IMAGEURL: $IMAGEURL/$IMAGE.$IMGTYPE"
+      echo "  DISKFILE: $IMAGE.$FORMAT"
+      echo "      CIDR: $CIDR"
+      echo "      CPUS: $CPUS"
+      echo "       RAM: $RAM"
+      echo "       HDD: $HDD"
     ;;
     net)
       create-vmnet
@@ -304,13 +323,13 @@ for arg in "$@"; do
       download-image
     ;;
     master)
-      UUID=24AF0C19-3B96-487C-92F7-584C9932DD96 NAME=master CPUS=2 RAM=4G DISK=40G create-machine
+      UUID=24AF0C19-3B96-487C-92F7-584C9932DD96 NAME=master CPUS=$CPUS RAM=$RAM DISK=$HDD create-machine
     ;;
     node1)
-      UUID=B0F97DC5-5E9F-40FC-B829-A1EF974F5640 NAME=node1 CPUS=2 RAM=4G DISK=40G create-machine
+      UUID=B0F97DC5-5E9F-40FC-B829-A1EF974F5640 NAME=node1 CPUS=$CPUS RAM=$RAM DISK=$HDD create-machine
     ;;
     node2)
-      UUID=0BD5B90C-E00C-4E1B-B3CF-117D6FF3C09F NAME=node2 CPUS=2 RAM=4G DISK=40G create-machine
+      UUID=0BD5B90C-E00C-4E1B-B3CF-117D6FF3C09F NAME=node2 CPUS=$CPUS RAM=$RAM DISK=$HDD create-machine
     ;;
     stop)
       go-to-scriptdir
