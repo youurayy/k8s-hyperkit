@@ -245,7 +245,7 @@ help()
   echo "Practice real Kubernetes configurations on a local multi-node cluster."
   echo "Inspect and optionally customize this script before use."
   echo
-  echo "Usage: ./hyperkit.sh [ install | create-vmnet | cidr | hosts | clean-dhcp | image "
+  echo "Usage: ./hyperkit.sh [ install | net | cidr | hosts | clean-dhcp | image | "
   echo "        master | node1 | node2 | info | stop | kill | delete ]+"
   echo
   echo "For more info, see: https://github.com/youurayy/k8s-hyperkit"
