@@ -14,8 +14,8 @@ if ! [ -a $SSHPATH ]; then
 fi
 SSHPUB=$(cat $SSHPATH)
 
-VERSION=18.04
-# VERSION=19.04
+VERSION=18.04 # kernel 4.15; https://wiki.ubuntu.com/BionicBeaver/ReleaseNotes
+# VERSION=19.04 # kernel 5.0; https://wiki.ubuntu.com/DiscoDingo/ReleaseNotes
 IMAGE=ubuntu-$VERSION-server-cloudimg-amd64
 IMAGEURL=https://cloud-images.ubuntu.com/releases/server/$VERSION/release
 KERNEL="$IMAGE-vmlinuz-generic"
@@ -122,7 +122,7 @@ users:
     sudo: [ 'ALL=(ALL) NOPASSWD:ALL' ]
     groups: [ sudo, docker ]
     shell: /bin/bash
-    # lock_passwd: false
+    # lock_passwd: false # passwd won't work without this
     # passwd: '\$6\$rounds=4096\$byY3nxArmvpvOrpV\$2M4C8fh3ZXx10v91yzipFRng1EFXTRNDE3q9PvxiPc3kC7N/NHG8HiwAvhd7QjMgZAXOsuBD5nOs0AJkByYmf/' # 'test'
 
 write_files:
