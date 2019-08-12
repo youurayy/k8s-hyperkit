@@ -319,7 +319,15 @@ for arg in "$@"; do
       echo "       HDD: $HDD"
     ;;
     print)
-      # TODO
+      sudo echo
+
+      echo "***** com.apple.vmnet.plist *****"
+      sudo cat /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
+
+      echo "***** /var/db/dhcpd_leases *****"
+      cat /var/db/dhcpd_leases
+
+      # TODO uuids
     ;;
     net)
       create-vmnet
@@ -329,7 +337,6 @@ for arg in "$@"; do
         -replace Shared_Net_Address \
         -string $CIDR.1 \
         /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
-      sudo cat /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
     ;;
     hosts)
       etc-hosts
@@ -340,7 +347,7 @@ for arg in "$@"; do
     image)
       download-image
     ;;
-    master)
+    master) # TODO
       UUID=24AF0C19-3B96-487C-92F7-584C9932DD96 NAME=master CPUS=$CPUS RAM=$RAM DISK=$HDD create-machine
     ;;
     node1)

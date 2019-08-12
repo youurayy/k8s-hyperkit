@@ -14,11 +14,13 @@ Current state: pre-release; TODO: k8s helm setup
 
 ```bash
 
+# note: `sudo` is necessary for access to macOS Hypervisor and vmnet frameworks, and /etc/hosts config
+
 # download the script
 cd workdir
 git clone git@github.com:youurayy/k8s-hyperkit.git && cd k8s-hyperkit
 # ---- or -----
-curl https://raw.githubusercontent.com/youurayy/k8s-hyperkit/master/hyperkit.sh -O -
+curl https://raw.githubusercontent.com/youurayy/k8s-hyperkit/master/hyperkit.sh -O
 chmod +x hyperkit.sh
 
 # examine and customize the script, e.g.:
