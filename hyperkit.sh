@@ -274,7 +274,7 @@ cat << EOF
         info - display info about nodes
         stop - stop the VMs
         kill - force-stop the VMs
-      delete - delete the VMs
+      delete - delete the VMs files
 
   For more info, see: https://github.com/youurayy/k8s-hyperkit
 EOF
