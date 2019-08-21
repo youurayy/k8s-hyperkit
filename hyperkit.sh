@@ -24,7 +24,7 @@ case $CONFIG in
     IMAGE="ubuntu-$VERSION-server-cloudimg-amd64"
     IMAGEURL="https://cloud-images.ubuntu.com/releases/server/$VERSION/release"
     SHA256FILE="SHA256SUMS"
-    KERNDIR="unpacked"
+    KERNURL="https://cloud-images.ubuntu.com/releases/server/$VERSION/release/unpacked"
     KERNEL="$IMAGE-vmlinuz-generic"
     INITRD="$IMAGE-initrd-generic"
     IMGTYPE="vmdk"
@@ -36,7 +36,7 @@ case $CONFIG in
     IMAGE="ubuntu-$VERSION-server-cloudimg-amd64"
     IMAGEURL="https://cloud-images.ubuntu.com/releases/server/$VERSION/release"
     SHA256FILE="SHA256SUMS"
-    KERNDIR="unpacked"
+    KERNURL="https://cloud-images.ubuntu.com/releases/server/$VERSION/release/unpacked"
     KERNEL="$IMAGE-vmlinuz-generic"
     INITRD="$IMAGE-initrd-generic"
     IMGTYPE="vmdk"
@@ -48,10 +48,9 @@ case $CONFIG in
     IMAGE="CentOS-7-x86_64-GenericCloud-$VERSION"
     IMAGEURL="https://cloud.centos.org/centos/7/images"
     SHA256FILE="sha256sum.txt"
-    KERNDIR=
-    KERNURL="http://mirror.centos.org/centos/7/os/x86_64/Packages/kernel-3.10.0-957.el7.x86_64.rpm"
-    KERNEL="vmlinuz-3.10.0-957.el7.x86_64"
-    INITRD="$IMAGE-initrd-generic"
+    KERNURL="https://github.com/youurayy/k8s-hyperkit/releases/download/centos-kernel/"
+    KERNEL="vmlinuz-3.10.0-957.27.2.el7.x86_64"
+    INITRD="initramfs-3.10.0-957.27.2.el7.x86_64.img"
     IMGTYPE="raw"
     ARCHIVE=".tar.gz"
   ;;
@@ -63,7 +62,7 @@ ISO="cloud-init.iso"
 
 CPUS=4
 RAM=4GB
-HDD=40GB
+HDD=40G
 
 FORMAT="raw"
 FILEPREFIX=""
@@ -81,6 +80,209 @@ DISKDEV="ahci-hd"
 # use for prod/ssh:
 BACKGROUND='>> output.log 2>&1 &'
 
+UUIDS=(
+  "master 24AF0C19-3B96-487C-92F7-584C9932DD96 $CIDR.10 32:a2:b4:36:57:16"
+  "node1  B0F97DC5-5E9F-40FC-B829-A1EF974F5640 $CIDR.11 46:5:bd:af:97:f"
+  "node2  0BD5B90C-E00C-4E1B-B3CF-117D6FF3C09F $CIDR.12 c6:b7:b1:30:6:fd"
+  "node3  7B822993-5E08-41D4-9FB6-8F9FD31C9AD8 $CIDR.13 86:eb:d9:e1:f2:ce"
+  "node4  384C454E-B22B-4945-A33F-2E3E2E9F74B4 $CIDR.14 ae:33:94:63:3a:8f"
+  "node5  BEC17A85-E2B4-480F-B86C-808412E21823 $CIDR.15 f2:66:d8:80:e5:bd"
+  "node6  F6C972A8-0B73-4C72-9F7C-202AAC773DD8 $CIDR.16 92:50:d8:18:86:d5"
+  "node7  F05E1728-7403-46CF-B88E-B243D754B800 $CIDR.17 86:d6:cf:41:e0:3e"
+  "node8  38659F47-3A64-49E3-AE6E-B41F6A42E1D1 $CIDR.18 ca:c5:12:22:d:ce"
+  "node9  20DD5167-9FBE-439E-9849-E324E984FB96 $CIDR.19 f6:d4:b9:fd:20:c"
+)
+
+CNI="flannel"
+
+case $CNI in
+  flannel)
+    CNIYAML="https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
+    CNINET="10.244.0.0/16"
+  ;;
+  weave)
+    CNIYAML="https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d "\n")"
+    CNINET="10.32.0.0/12"
+  ;;
+  calico)
+    CNIYAML="https://docs.projectcalico.org/v3.7/manifests/calico.yaml"
+    CNINET="192.168.0.0/16"
+  ;;
+esac
+
+SSHOPTS="-o LogLevel=ERROR -o StrictHostKeyChecking=false -o UserKnownHostsFile=/dev/null"
+
+# -------------------------CLOUD INIT-----------------------------------
+
+cloud-init() {
+USERDATA_shared="\
+#cloud-config
+
+mounts:
+  - [ swap ]
+
+groups:
+  - docker
+
+users:
+  - name: $GUESTUSER
+    ssh_authorized_keys:
+      - '$SSHPUB'
+    sudo: [ 'ALL=(ALL) NOPASSWD:ALL' ]
+    groups: [ sudo, docker ]
+    shell: /bin/bash
+    # lock_passwd: false # passwd won't work without this
+    # passwd: '\$6\$rounds=4096\$byY3nxArmvpvOrpV\$2M4C8fh3ZXx10v91yzipFRng1EFXTRNDE3q9PvxiPc3kC7N/NHG8HiwAvhd7QjMgZAXOsuBD5nOs0AJkByYmf/' # 'test'
+
+write_files:
+  # resolv.conf hard-set is a workaround for intial setup
+  - path: /tmp/append-etc-hosts
+    content: |
+      $(etc-hosts '      ')
+  - path: /etc/resolv.conf
+    content: |
+      nameserver 8.8.4.4
+      nameserver 8.8.8.8
+  - path: /etc/systemd/resolved.conf
+    content: |
+      [Resolve]
+      DNS=8.8.4.4
+      FallbackDNS=8.8.8.8
+  - path: /etc/modules-load.d/k8s.conf
+    content: |
+      br_netfilter
+  - path: /etc/sysctl.d/k8s.conf
+    content: |
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.bridge.bridge-nf-call-iptables = 1
+      net.bridge.bridge-nf-call-arptables = 1
+      net.ipv4.ip_forward = 1
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        \"exec-opts\": [\"native.cgroupdriver=systemd\"],
+        \"log-driver\": \"json-file\",
+        \"log-opts\": {
+          \"max-size\": \"100m\"
+        },
+        \"storage-driver\": \"overlay2\",
+        \"storage-opts\": [
+          \"overlay2.override_kernel_check=true\"
+        ]
+      }"
+
+USERDATA_centos="\
+$USERDATA_shared
+  # https://github.com/kubernetes/kubernetes/issues/56850
+  - path: /usr/lib/systemd/system/kubelet.service.d/12-after-docker.conf
+    content: |
+      [Unit]
+      After=docker.service
+
+yum_repos:
+  docker-ce-stable:
+    name: Docker CE Stable - \$basearch
+    baseurl: https://download.docker.com/linux/centos/7/\$basearch/stable
+    enabled: 1
+    gpgcheck: 1
+    gpgkey: https://download.docker.com/linux/centos/gpg
+    priority: 1
+  kubernetes:
+    name: Kubernetes
+    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+    enabled: 1
+    gpgcheck: 1
+    repo_gpgcheck: 1
+    gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+    priority: 1
+
+package_upgrade: true
+
+packages:
+  - yum-utils
+  - device-mapper-persistent-data
+  - lvm2
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - kubelet
+  - kubeadm
+  - kubectl
+
+runcmd:
+  - cat /tmp/append-etc-hosts >> /etc/hosts
+  - setenforce 0
+  - sed -i 's/^SELINUX=enforcing\$/SELINUX=permissive/' /etc/selinux/config
+  - mkdir -p /etc/systemd/system/docker.service.d
+  - systemctl disable firewalld
+  - systemctl daemon-reload
+  - systemctl enable docker
+  - systemctl enable kubelet
+  # https://github.com/kubernetes/kubeadm/issues/954
+  - echo 'exclude=kube*' >> /etc/yum.repos.d/kubernetes.repo
+  # https://github.com/kubernetes/kubernetes/issues/76531
+  - curl -L 'https://github.com/youurayy/runc/releases/download/v1.0.0-rc8-slice-fix/runc-centos.tgz' | tar --backup=numbered -xzf - -C \$(dirname \$(which runc))
+  - echo 'sudo tail -f /var/log/messages' > /home/$GUESTUSER/log
+  - systemctl start docker
+  - touch /home/$GUESTUSER/.init-completed
+"
+
+USERDATA_ubuntu="\
+$USERDATA_shared
+  # https://github.com/kubernetes/kubernetes/issues/56850
+  - path: /etc/systemd/system/kubelet.service.d/12-after-docker.conf
+    content: |
+      [Unit]
+      After=docker.service
+  - path: /etc/apt/preferences.d/docker-pin
+    content: |
+      Package: *
+      Pin: origin download.docker.com
+      Pin-Priority: 600
+  - path: /etc/systemd/network/99-default.link
+    content: |
+      [Match]
+      Path=/devices/virtual/net/*
+      [Link]
+      NamePolicy=kernel database onboard slot path
+      MACAddressPolicy=none
+
+apt:
+  sources:
+    kubernetes:
+      source: 'deb http://apt.kubernetes.io/ kubernetes-xenial main'
+      keyserver: 'hkp://keyserver.ubuntu.com:80'
+      keyid: BA07F4FB
+    docker:
+      arches: amd64
+      source: 'deb https://download.docker.com/linux/ubuntu bionic stable'
+      keyserver: 'hkp://keyserver.ubuntu.com:80'
+      keyid: 0EBFCD88
+
+package_upgrade: true
+
+packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - kubelet
+  - kubectl
+  - kubeadm
+
+runcmd:
+  - systemctl stop kubelet
+  - cat /tmp/append-etc-hosts >> /etc/hosts
+  - chmod o+r /lib/systemd/system/kubelet.service
+  - chmod o+r /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+  # https://github.com/kubernetes/kubeadm/issues/954
+  - apt-mark hold kubeadm kubelet
+  # https://github.com/kubernetes/kubernetes/issues/76531
+  - curl -L 'https://github.com/youurayy/runc/releases/download/v1.0.0-rc8-slice-fix/runc-ubuntu.tbz' | tar --backup=numbered -xjf - -C \$(dirname \$(which runc))
+  - echo 'sudo tail -f /var/log/syslog' > /home/$GUESTUSER/log
+  - touch /home/$GUESTUSER/.init-completed
+"
+}
+
 # ----------------------------------------------------------------------
 
 set -e
@@ -91,38 +293,60 @@ go-to-scriptdir() {
   cd $BASEDIR
 }
 
+get_host() {
+  echo ${UUIDS[$1]} | awk '{ print $1 }'
+}
+
+get_uuid() {
+  echo ${UUIDS[$1]} | awk '{ print $2 }'
+}
+
+get_ip() {
+  echo ${UUIDS[$1]} | awk '{ print $3 }'
+}
+
+get_mac() {
+  echo ${UUIDS[$1]} | awk '{ print $4 }'
+}
+
+dhcpd_leases() {
+cat << EOF | sudo tee -a /var/db/dhcpd_leases
+$(for i in `seq 9 -1 0`; do echo "{
+        name=$(get_host $i)
+        ip_address=$(get_ip $i)
+        hw_address=1,$(get_mac $i)
+        identifier=1,$(get_mac $i)
+}"; done)
+EOF
+}
+
+etc-hosts() {
+cat << EOF
+#
+$1#
+$(for i in `seq 0 1 9`; do echo -e "$1$(get_ip $i) $(get_host $i)"; done)
+$1#
+$1#
+EOF
+}
+
 download-image() {
   go-to-scriptdir
   mkdir -p $WORKDIR && cd $WORKDIR
-  if true; then
-  # if ! [ -a $IMAGE.$IMGTYPE ]; then
-    # curl $IMAGEURL/$IMAGE.$IMGTYPE$ARCHIVE -O
-    # shasum -a 256 -c <(curl -s $IMAGEURL/$SHA256FILE | grep "$IMAGE.$IMGTYPE$ARCHIVE")
 
-    # if [ "$ARCHIVE" = ".tar.gz" ]; then
-    #   tar xzf $IMAGE.$IMGTYPE$ARCHIVE
-    # fi
+  if ! [ -a $IMAGE.$IMGTYPE ]; then
+    curl $IMAGEURL/$IMAGE.$IMGTYPE$ARCHIVE -O
+    shasum -a 256 -c <(curl -s $IMAGEURL/$SHA256FILE | grep "$IMAGE.$IMGTYPE$ARCHIVE")
 
-    if [ -n "$KERNDIR" ]; then
-      curl $IMAGEURL/$KERNDIR/$KERNEL -O
-      curl $IMAGEURL/$KERNDIR/$INITRD -O
-      shasum -a 256 -c <(curl -s $IMAGEURL/$KERNDIR/$SHA256FILE | grep "$KERNEL")
-      shasum -a 256 -c <(curl -s $IMAGEURL/$KERNDIR/$SHA256FILE | grep "$INITRD")
-    else
+    if [ "$ARCHIVE" = ".tar.gz" ]; then
+      tar xzf $IMAGE.$IMGTYPE$ARCHIVE
+    fi
 
-      # ls -l $IMAGE.$IMGTYPE
-      # hdiutil attach -imagekey diskimage-class=CRawDiskImage -readonly -nomount $IMAGE.$IMGTYPE \
-      # PART=$(cat testout \
-      #   | tail -n 1 | awk '{ print $1 }')
-      # echo "part: $PART"
-      # mkdir -p mount
-      # ext4fuse $PART $PWD/mount -o allow_other
-      # fuse-xfs $PART -- $PWD/mount -o default_permissions,allow_other
-
-      curl $KERNURL -O - | tar xzf - "./boot/$KERNEL"
-
-      # tar tzf tmp/kernel-3.10.0-957.el7.x86_64.rpm './boot/vmlinuz*' | less
-
+    if [ -n "$KERNURL" ]; then
+      curl -L $KERNURL/$KERNEL -O
+      curl -L $KERNURL/$INITRD -O
+      shasum -a 256 -c <(curl -s -L $KERNURL/$SHA256FILE | grep "$KERNEL")
+      shasum -a 256 -c <(curl -s -L $KERNURL/$SHA256FILE | grep "$INITRD")
     fi
   fi
 }
@@ -155,75 +379,11 @@ instance-id: id-$NAME
 local-hostname: $NAME
 EOF
 
-# tmp test init
-# cat << EOF > cidata/user-data
-# #cloud-config
-# password: test
-# chpasswd: { expire: False }
-# ssh_pwauth: True
-# EOF
+  cloud-init
+  varname=USERDATA_$DISTRO
 
 cat << EOF > cidata/user-data
-#cloud-config
-
-mounts:
-  - [ swap ]
-
-groups:
-  - docker
-
-users:
-  - name: $GUESTUSER
-    ssh_authorized_keys:
-      - '$SSHPUB'
-    sudo: [ 'ALL=(ALL) NOPASSWD:ALL' ]
-    groups: [ sudo, docker ]
-    shell: /bin/bash
-    # lock_passwd: false # passwd won't work without this
-    # passwd: '\$6\$rounds=4096\$byY3nxArmvpvOrpV\$2M4C8fh3ZXx10v91yzipFRng1EFXTRNDE3q9PvxiPc3kC7N/NHG8HiwAvhd7QjMgZAXOsuBD5nOs0AJkByYmf/' # 'test'
-
-write_files:
-  - path: /etc/resolv.conf
-    content: |
-      nameserver 8.8.4.4
-      nameserver 8.8.8.8
-  - path: /etc/systemd/resolved.conf
-    content: |
-      [Resolve]
-      DNS=8.8.4.4
-      FallbackDNS=8.8.8.8
-  - path: /etc/modules-load.d/bridge.conf
-    content: |
-      br_netfilter
-  - path: /etc/sysctl.d/bridge.conf
-    content: |
-      net.bridge.bridge-nf-call-ip6tables = 1
-      net.bridge.bridge-nf-call-iptables = 1
-      net.bridge.bridge-nf-call-arptables = 1
-
-apt:
-  sources:
-    kubernetes:
-      source: "deb http://apt.kubernetes.io/ kubernetes-xenial main"
-      keyserver: "hkp://keyserver.ubuntu.com:80"
-      keyid: BA07F4FB
-      file: kubernetes.list
-
-package_upgrade: true
-
-packages:
-  - docker.io
-  - kubelet
-  - kubectl
-  - kubeadm
-
-runcmd:
-  - systemctl enable docker
-  - systemctl enable kubelet
-
-power_state:
-  timeout: 10
-  mode: poweroff
+${!varname}
 EOF
 
   rm -f $ISO
@@ -233,7 +393,13 @@ EOF
 
   if ! [ -a $DISKFILE ]; then
     echo Creating $(pwd)/$DISKFILE
-    qemu-img convert -O $FORMAT ../$IMAGE.$IMGTYPE $DISKFILE
+
+    if [ $FORMAT != $IMGTYPE ]; then
+      qemu-img convert -O $FORMAT ../$IMAGE.$IMGTYPE $DISKFILE
+    else
+      cp ../$IMAGE.$IMGTYPE $DISKFILE
+    fi
+
     qemu-img resize -f $FORMAT $DISKFILE $DISK
   fi
 
@@ -264,16 +430,6 @@ EOF
   fi
 }
 
-etc-hosts() {
-cat << EOF | sudo tee -a /etc/hosts
-
-$CIDR.2 master
-$CIDR.3 node1
-$CIDR.4 node2
-
-EOF
-}
-
 create-vmnet() {
 cat << EOF | sudo tee /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
 <?xml version="1.0" encoding="UTF-8"?>
@@ -289,6 +445,24 @@ cat << EOF | sudo tee /Library/Preferences/SystemConfiguration/com.apple.vmnet.p
 EOF
 }
 
+proc-list() {
+  echo $1
+  ps auxw | grep hyperkit
+}
+
+node-info() {
+  if is-machine-running $1; then
+    etc=$(ps uxw -p $(cat $1/machine.pid 2> /dev/null) 2> /dev/null | tail -n 1 | awk '{ printf("%s\t%s\t%s\t%s\t%s\t%s", $2, $3, $4, int($6/1024)"M", $9, $10); }')
+  else
+    etc='-\t-\t-\t-\t-\t-'
+  fi
+  name=$(basename $1)
+  disk=$(ls -lh $1/*.$FORMAT | awk '{print $5}')
+  sparse=$(du -h $1/*.$FORMAT | awk '{print $1}')
+  status=$(if is-machine-running $1; then echo "RUNNING"; else echo "NOT RUNNING"; fi)
+  echo -e "$name\\t$etc\\t$disk\\t$sparse\\t$status"
+}
+
 help() {
 cat << EOF
   Practice real Kubernetes configurations on a local multi-node cluster.
@@ -298,7 +472,7 @@ cat << EOF
 
   Commands:
 
-     install - install basic chocolatey packages
+     install - install basic homebrew packages
       config - show script config vars
        print - print contents of relevant config files
          net - create or reset the vmnet config
@@ -321,24 +495,6 @@ cat << EOF
 EOF
 }
 
-proc-list() {
-  echo $1
-  ps auxw | grep hyperkit
-}
-
-node-info() {
-  if is-machine-running $1; then
-    etc=$(ps uxw -p $(cat $1/machine.pid 2> /dev/null) 2> /dev/null | tail -n 1 | awk '{ printf("%s\t%s\t%s\t%s\t%s\t%s", $2, $3, $4, int($6/1024)"M", $9, $10); }')
-  else
-    etc='-\t-\t-\t-\t-\t-'
-  fi
-  name=$(basename $1)
-  disk=$(ls -lh $1/*.$FORMAT | awk '{print $5}')
-  sparse=$(du -h $1/*.$FORMAT | awk '{print $1}')
-  status=$(if is-machine-running $1; then echo "RUNNING"; else echo "NOT RUNNING"; fi)
-  echo -e "$name\\t$etc\\t$disk\\t$sparse\\t$status"
-}
-
 echo
 
 if [ $# -eq 0 ]; then help; fi
@@ -346,8 +502,7 @@ if [ $# -eq 0 ]; then help; fi
 for arg in "$@"; do
   case $arg in
     install)
-      brew cask install osxfuse
-      brew install hyperkit qemu kubernetes-cli kubernetes-helm ext4fuse
+      brew install hyperkit qemu kubernetes-cli kubernetes-helm
     ;;
     config)
       echo "    CONFIG: $CONFIG"
@@ -374,7 +529,8 @@ for arg in "$@"; do
       echo "***** /var/db/dhcpd_leases *****"
       cat /var/db/dhcpd_leases
 
-      # TODO uuids
+      echo "***** /etc/hosts *****"
+      cat /etc/hosts
     ;;
     net)
       create-vmnet
@@ -386,31 +542,49 @@ for arg in "$@"; do
         /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
     ;;
     hosts)
-      etc-hosts
+      echo "$(etc-hosts)" | sudo tee -a /etc/hosts
     ;;
     dhcp)
-      echo | sudo tee /var/db/dhcpd_leases
+      dhcpd_leases
     ;;
     image)
       download-image
     ;;
     master)
-      UUID=24AF0C19-3B96-487C-92F7-584C9932DD96 NAME=master CPUS=$CPUS RAM=$RAM DISK=$HDD create-machine
+      UUID=$(get_uuid 0) NAME=master CPUS=$CPUS RAM=$RAM DISK=$HDD create-machine
     ;;
-    node1)
-      UUID=B0F97DC5-5E9F-40FC-B829-A1EF974F5640 NAME=node1 CPUS=$CPUS RAM=$RAM DISK=$HDD create-machine
-    ;;
-    node2)
-      UUID=0BD5B90C-E00C-4E1B-B3CF-117D6FF3C09F NAME=node2 CPUS=$CPUS RAM=$RAM DISK=$HDD create-machine
+    node*)
+      num=$(echo $arg | sed -E 's:node(.+):\1:')
+      UUID=$(get_uuid $num) NAME=$arg CPUS=$CPUS RAM=$RAM DISK=$HDD create-machine
     ;;
     info)
       go-to-scriptdir
       { echo -e 'NAME\tPID\t%CPU\t%MEM\tRSS\tSTARTED\tTIME\tDISK\tSPARSE\tSTATUS' &
       find $WORKDIR/* -maxdepth 0 -type d | while read node; do node-info "$node"; done } | column -ts $'\t'
     ;;
+    init)
+      # TODO
+    ;;
+    reboot)
+      # TODO
+    ;;
+    shutdown)
+      # TODO
+    ;;
     stop)
       go-to-scriptdir
       sudo find $WORKDIR -name machine.pid -exec sh -c 'kill -TERM $(cat $1)' sh {} ';'
+    ;;
+    start)
+      # TODO
+
+  cloud-init
+  varname=USERDATA_$DISTRO
+
+cat << EOF > user-data.yaml
+${!varname}
+EOF
+
     ;;
     kill)
       go-to-scriptdir

@@ -97,7 +97,8 @@ code hyperkit.sh
 # updates /etc/hosts with currently configured CIDR;
 # then you can use e.g. `ssh master` or `ssh node1` etc.
 # note: if your Mac's vmnet was already used with this CIDR, you will need to
-# adjust the /etc/hosts values manually (according to /var/db/dhcpd_leases).
+# adjust the /etc/hosts values manually (according to /var/db/dhcpd_leases),
+# ideally after you launch your k8s nodes.
 # (you should examine the dhcpd_leases first to see if other apps are using it)
 ./hyperkit.sh hosts
 
