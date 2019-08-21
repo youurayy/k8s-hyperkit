@@ -5,7 +5,7 @@
 
 # ---------------------------SETTINGS------------------------------------
 
-WORKDIR=./tmp
+WORKDIR="./tmp"
 GUESTUSER=$USER
 SSHPATH="$HOME/.ssh/id_rsa.pub"
 if ! [ -a $SSHPATH ]; then
@@ -14,14 +14,48 @@ if ! [ -a $SSHPATH ]; then
 fi
 SSHPUB=$(cat $SSHPATH)
 
-VERSION=18.04 # kernel 4.15; https://wiki.ubuntu.com/BionicBeaver/ReleaseNotes
-# VERSION=19.04 # kernel 5.0; https://wiki.ubuntu.com/DiscoDingo/ReleaseNotes
-IMAGE=ubuntu-$VERSION-server-cloudimg-amd64
-IMAGEURL=https://cloud-images.ubuntu.com/releases/server/$VERSION/release
-KERNEL="$IMAGE-vmlinuz-generic"
-INITRD="$IMAGE-initrd-generic"
-IMGTYPE="vmdk"
-# IMGTYPE="img" # does not work; https://github.com/moby/hyperkit/issues/258
+CONFIG=$(cat .distro 2> /dev/null)
+CONFIG=${CONFIG:-"centos"}
+
+case $CONFIG in
+  bionic)
+    DISTRO="ubuntu"
+    VERSION="18.04"
+    IMAGE="ubuntu-$VERSION-server-cloudimg-amd64"
+    IMAGEURL="https://cloud-images.ubuntu.com/releases/server/$VERSION/release"
+    SHA256FILE="SHA256SUMS"
+    KERNDIR="unpacked"
+    KERNEL="$IMAGE-vmlinuz-generic"
+    INITRD="$IMAGE-initrd-generic"
+    IMGTYPE="vmdk"
+    ARCHIVE=
+  ;;
+  disco)
+    DISTRO="ubuntu"
+    VERSION="19.04"
+    IMAGE="ubuntu-$VERSION-server-cloudimg-amd64"
+    IMAGEURL="https://cloud-images.ubuntu.com/releases/server/$VERSION/release"
+    SHA256FILE="SHA256SUMS"
+    KERNDIR="unpacked"
+    KERNEL="$IMAGE-vmlinuz-generic"
+    INITRD="$IMAGE-initrd-generic"
+    IMGTYPE="vmdk"
+    ARCHIVE=""
+  ;;
+  centos)
+    DISTRO="centos"
+    VERSION="1907"
+    IMAGE="CentOS-7-x86_64-GenericCloud-$VERSION"
+    IMAGEURL="https://cloud.centos.org/centos/7/images"
+    SHA256FILE="sha256sum.txt"
+    KERNDIR=
+    KERNURL="http://mirror.centos.org/centos/7/os/x86_64/Packages/kernel-3.10.0-957.el7.x86_64.rpm"
+    KERNEL="$IMAGE-vmlinuz-generic"
+    INITRD="$IMAGE-initrd-generic"
+    IMGTYPE="raw"
+    ARCHIVE=".tar.gz"
+  ;;
+esac
 
 CIDR="10.10.0"
 CMDLINE="earlyprintk=serial console=ttyS0 root=/dev/sda1" # root=LABEL=cloudimg-rootfs
@@ -60,13 +94,34 @@ go-to-scriptdir() {
 download-image() {
   go-to-scriptdir
   mkdir -p $WORKDIR && cd $WORKDIR
-  if ! [ -a $IMAGE.$IMGTYPE ]; then
-    curl $IMAGEURL/$IMAGE.$IMGTYPE -O
-    curl $IMAGEURL/unpacked/$KERNEL -O
-    curl $IMAGEURL/unpacked/$INITRD -O
-    shasum -a 256 -c <(curl -s $IMAGEURL/SHA256SUMS | grep "$IMAGE.$IMGTYPE")
-    shasum -a 256 -c <(curl -s $IMAGEURL/unpacked/SHA256SUMS | grep "$KERNEL")
-    shasum -a 256 -c <(curl -s $IMAGEURL/unpacked/SHA256SUMS | grep "$INITRD")
+  if true; then
+  # if ! [ -a $IMAGE.$IMGTYPE ]; then
+    # curl $IMAGEURL/$IMAGE.$IMGTYPE$ARCHIVE -O
+    # shasum -a 256 -c <(curl -s $IMAGEURL/$SHA256FILE | grep "$IMAGE.$IMGTYPE$ARCHIVE")
+
+    # if [ "$ARCHIVE" = ".tar.gz" ]; then
+    #   tar xzf $IMAGE.$IMGTYPE$ARCHIVE
+    # fi
+
+    if [ -n "$KERNDIR" ]; then
+      curl $IMAGEURL/$KERNDIR/$KERNEL -O
+      curl $IMAGEURL/$KERNDIR/$INITRD -O
+      shasum -a 256 -c <(curl -s $IMAGEURL/$KERNDIR/$SHA256FILE | grep "$KERNEL")
+      shasum -a 256 -c <(curl -s $IMAGEURL/$KERNDIR/$SHA256FILE | grep "$INITRD")
+    else
+
+      # ls -l $IMAGE.$IMGTYPE
+      # hdiutil attach -imagekey diskimage-class=CRawDiskImage -readonly -nomount $IMAGE.$IMGTYPE \
+      # PART=$(cat testout \
+      #   | tail -n 1 | awk '{ print $1 }')
+      # echo "part: $PART"
+      # mkdir -p mount
+      # ext4fuse $PART $PWD/mount -o allow_other
+      # fuse-xfs $PART -- $PWD/mount -o default_permissions,allow_other
+
+      curl $KERNURL -O | tar tzf -
+
+    fi
   fi
 }
 
@@ -169,24 +224,6 @@ power_state:
   mode: poweroff
 EOF
 
-# write_files:
-#   - path: /etc/apt/preferences.d/docker-pin
-#     content: |
-#       Package: *
-#       Pin: origin download.docker.com
-#       Pin-Priority: 600
-# apt:
-#   sources:
-#     docker.list:
-#       arches: amd64
-#       source: "deb https://download.docker.com/linux/ubuntu bionic stable"
-#       keyserver: "hkp://keyserver.ubuntu.com:80"
-#       keyid: 0EBFCD88
-# packages:
-#  - docker-ce
-#  - docker-ce-cli
-#  - containerd.io
-
   rm -f $ISO
   hdiutil makehybrid -iso -joliet -o $ISO cidata
 
@@ -214,19 +251,18 @@ hyperkit -A \
 echo \$! > machine.pid
 EOF
 
-chmod +x cmdline
-cat cmdline
-sudo ./cmdline
+  chmod +x cmdline
+  cat cmdline
+  sudo ./cmdline
 
-if [ -z "$BACKGROUND" ]; then
-  rm -f machine.pid
-else
-  echo "started PID $(cat machine.pid)"
-fi
+  if [ -z "$BACKGROUND" ]; then
+    rm -f machine.pid
+  else
+    echo "started PID $(cat machine.pid)"
+  fi
 }
 
-etc-hosts()
-{
+etc-hosts() {
 cat << EOF | sudo tee -a /etc/hosts
 
 $CIDR.2 master
@@ -236,8 +272,7 @@ $CIDR.4 node2
 EOF
 }
 
-create-vmnet()
-{
+create-vmnet() {
 cat << EOF | sudo tee /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -272,7 +307,11 @@ cat << EOF
       master - create and launch master node
        nodeN - create and launch worker node (node1, node2, ...)
         info - display info about nodes
+        init - initialize k8s and setup host kubectl
+      reboot - soft-reboot the nodes
+    shutdown - soft-shutdown the nodes
         stop - stop the VMs
+       start - start the VMs
         kill - force-stop the VMs
       delete - delete the VMs files
 
@@ -305,18 +344,24 @@ if [ $# -eq 0 ]; then help; fi
 for arg in "$@"; do
   case $arg in
     install)
-      brew install hyperkit qemu kubernetes-cli kubernetes-helm
+      brew cask install osxfuse
+      brew install hyperkit qemu kubernetes-cli kubernetes-helm ext4fuse
     ;;
     config)
+      echo "    CONFIG: $CONFIG"
+      echo "    DISTRO: $DISTRO"
       echo "   WORKDIR: $WORKDIR"
       echo " GUESTUSER: $GUESTUSER"
       echo "   SSHPATH: $SSHPATH"
-      echo "  IMAGEURL: $IMAGEURL/$IMAGE.$IMGTYPE"
+      echo "  IMAGEURL: $IMAGEURL/$IMAGE.$IMGTYPE$ARCHIVE"
       echo "  DISKFILE: $IMAGE.$FORMAT"
       echo "      CIDR: $CIDR"
       echo "      CPUS: $CPUS"
       echo "       RAM: $RAM"
       echo "       HDD: $HDD"
+      echo "       CNI: $CNI"
+      echo "    CNINET: $CNINET"
+      echo "   CNIYAML: $CNIYAML"
     ;;
     print)
       sudo echo
@@ -347,7 +392,7 @@ for arg in "$@"; do
     image)
       download-image
     ;;
-    master) # TODO
+    master)
       UUID=24AF0C19-3B96-487C-92F7-584C9932DD96 NAME=master CPUS=$CPUS RAM=$RAM DISK=$HDD create-machine
     ;;
     node1)
