@@ -50,7 +50,7 @@ case $CONFIG in
     SHA256FILE="sha256sum.txt"
     KERNDIR=
     KERNURL="http://mirror.centos.org/centos/7/os/x86_64/Packages/kernel-3.10.0-957.el7.x86_64.rpm"
-    KERNEL="$IMAGE-vmlinuz-generic"
+    KERNEL="vmlinuz-3.10.0-957.el7.x86_64"
     INITRD="$IMAGE-initrd-generic"
     IMGTYPE="raw"
     ARCHIVE=".tar.gz"
@@ -119,7 +119,9 @@ download-image() {
       # ext4fuse $PART $PWD/mount -o allow_other
       # fuse-xfs $PART -- $PWD/mount -o default_permissions,allow_other
 
-      curl $KERNURL -O | tar tzf -
+      curl $KERNURL -O - | tar xzf - "./boot/$KERNEL"
+
+      # tar tzf tmp/kernel-3.10.0-957.el7.x86_64.rpm './boot/vmlinuz*' | less
 
     fi
   fi
