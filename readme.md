@@ -46,7 +46,7 @@ chmod +x hyperkit.sh
         stop - stop the VMs
        start - start the VMs
         kill - force-stop the VMs
-      delete - delete the VMs files
+      delete - delete the VM files
 '
 
 # performs `brew install hyperkit qemu kubernetes-cli kubernetes-helm`.

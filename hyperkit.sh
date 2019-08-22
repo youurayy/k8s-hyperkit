@@ -488,7 +488,7 @@ cat << EOF
         stop - stop the VMs
        start - start the VMs
         kill - force-stop the VMs
-      delete - delete the VMs files
+      delete - delete the VM files
 
   For more info, see: https://github.com/youurayy/k8s-hyperkit
 EOF
