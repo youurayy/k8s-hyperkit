@@ -1,7 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
 # For usage overview, read the readme.md at https://github.com/youurayy/k8s-hyperkit
-# License: https://www.apache.org/licenses/LICENSE-2.0
-
 
 # ---------------------------SETTINGS------------------------------------
 
@@ -355,6 +354,16 @@ is-machine-running() {
   ps -p $(cat $1/machine.pid 2> /dev/null) > /dev/null 2>&1
 }
 
+start-machine() {
+  sudo ./cmdline
+
+  if [ -z "$BACKGROUND" ]; then
+    rm -f machine.pid
+  else
+    echo "started PID $(cat machine.pid)"
+  fi
+}
+
 create-machine() {
 
   if [ -z $UUID ] || [ -z $NAME ] || [ -z $CPUS ] || [ -z $RAM ] || [ -z $DISK ]; then
@@ -421,13 +430,8 @@ EOF
 
   chmod +x cmdline
   cat cmdline
-  sudo ./cmdline
 
-  if [ -z "$BACKGROUND" ]; then
-    rm -f machine.pid
-  else
-    echo "started PID $(cat machine.pid)"
-  fi
+  start-machine
 }
 
 create-vmnet() {
@@ -461,6 +465,16 @@ node-info() {
   sparse=$(du -h $1/*.$FORMAT | awk '{print $1}')
   status=$(if is-machine-running $1; then echo "RUNNING"; else echo "NOT RUNNING"; fi)
   echo -e "$name\\t$etc\\t$disk\\t$sparse\\t$status"
+}
+
+get-all-nodes() {
+  find $WORKDIR/* -maxdepth 0 -type d |
+    while read node; do echo -n " "`basename $node`; done
+}
+
+get-worker-nodes() {
+  find $WORKDIR/* -maxdepth 0 -type d -not -name master |
+    while read node; do echo -n " "`basename $node`; done
 }
 
 help() {
@@ -556,20 +570,79 @@ for arg in "$@"; do
       find $WORKDIR/* -maxdepth 0 -type d | while read node; do node-info "$node"; done } | column -ts $'\t'
     ;;
     init)
-      # TODO
+
+      allnodes=( $(get-all-nodes) )
+      workernodes=( $(get-worker-nodes) )
+
+      for node in ${allnodes[@]}; do
+        while ! ssh $SSHOPTS $node 'ls ~/.init-completed > /dev/null 2>&1'; do
+          echo "waiting for $node to init..."
+          sleep 5
+        done
+      done
+
+      echo "all nodes are pre-initialized, going to init k8s..."
+
+      init="sudo kubeadm init --pod-network-cidr=$CNINET &&
+        mkdir -p \$HOME/.kube &&
+        sudo cp -i /etc/kubernetes/admin.conf \$HOME/.kube/config &&
+        sudo chown \$(id -u):\$(id -g) \$HOME/.kube/config &&
+        kubectl apply -f \$(eval echo $CNIYAML)"
+
+      echo "executing on master: $init"
+
+      if ! ssh $SSHOPTS master $init; then
+        echo "master init has failed, aborting"
+        exit 1
+      fi
+
+      joincmd=$(ssh $SSHOPTS master 'sudo kubeadm token create --print-join-command')
+
+      for node in ${workernodes[@]}; do
+        echo "executing on $node: $joincmd"
+        ssh $SSHOPTS $node sudo $joincmd
+      done
+
+      mkdir -p ~/.kube
+      scp $SSHOPTS master:.kube/config ~/.kube/config.hyperv
+
+      hyperctl="kubectl --kubeconfig=~/.kube/config.hyperv"
+
+      echo ""
+
+      $hyperctl get pods --all-namespaces
+      $hyperctl get nodes
+
+      echo ""
+      echo "to setup bash alias, exec:"
+      echo ""
+      echo "echo \"alias hyperctl='echo $hyperctl' > ~/.profile\""
+      echo "source ~/.profile"
     ;;
     reboot)
-      # TODO
+      allnodes=( $(get-all-nodes) )
+      for node in ${allnodes[@]}; do
+        ssh $SSHOPTS $node sudo reboot
+      done
     ;;
     shutdown)
-      # TODO
+      allnodes=( $(get-all-nodes) )
+      for node in ${allnodes[@]}; do
+        ssh $SSHOPTS $node sudo shutdown -h now
+      done
     ;;
     stop)
       go-to-scriptdir
       sudo find $WORKDIR -name machine.pid -exec sh -c 'kill -TERM $(cat $1)' sh {} ';'
     ;;
     start)
-      # TODO
+      allnodes=( $(get-all-nodes) )
+      for node in ${allnodes[@]}; do
+        echo "starting $node..."
+        go-to-scriptdir
+        cd $WORKDIR/$node
+        start-machine
+      done
     ;;
     kill)
       go-to-scriptdir
