@@ -101,7 +101,7 @@ case $CNI in
     CNINET="10.244.0.0/16"
   ;;
   weave)
-    CNIYAML="https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d "\n")"
+    CNIYAML='https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d "\n")'
     CNINET="10.32.0.0/12"
   ;;
   calico)
