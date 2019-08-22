@@ -23,9 +23,6 @@ git clone git@github.com:youurayy/k8s-hyperkit.git && cd k8s-hyperkit
 curl https://raw.githubusercontent.com/youurayy/k8s-hyperkit/master/hyperkit.sh -O
 chmod +x hyperkit.sh
 
-# examine and customize the script, e.g.:
-code hyperkit.sh
-
 # display short synopsis for the available commands
 ./hyperkit.sh help
 '
@@ -37,9 +34,8 @@ code hyperkit.sh
       config - show script config vars
        print - print contents of relevant config files
          net - create or reset the vmnet config
-        cidr - update CIDR in the vmnet config
+        dhcp - append to the dhcp registry
        hosts - append node names to etc/hosts
-        dhcp - clean the dhcp registry
        image - download the VM image
       master - create and launch master node
        nodeN - create and launch worker node (node1, node2, ...)
@@ -77,40 +73,29 @@ code hyperkit.sh
    CNIYAML: https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
 '
 
-# (optional)
-# replaces /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist,
-# while setting a new CIDR (by default 10.10.0.0/24) to avoid colliding with the
-# default CIDRs of Kubernetes Pod networking plugins (Calico etc.).
-# (you should examine the vmnet.plist first to see if other apps are using it)
-# default CIDRs to avoid:
-# - Calico (192.168.0.0/16<->192.168.255.255)
-# - Weave Net (10.32.0.0/12<->10.47.255.255)
-# - Flannel (10.244.0.0/16<->10.244.255.255)
+# print external configs that this script can change
+./hyperkit.sh print
+
+# cleans or creates /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
+# and sets the CIDR configured in the script.
+# if other apps already use the vmnet framework, then you don't want to change it, in
+# which case don't run this command, but instead set the CIDR inside this script
+# to the value from the vmnet.plist (as shown by the 'print' command).
 ./hyperkit.sh net
 
-# (optional)
-# only resets the CIDR in /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist,
-# while perserving the contents (the file must exist / or is later auto-created).
-./hyperkit.sh cidr
+# appends IPs and MACs from the NODES config to the /var/db/dhcpd_leases.
+# this is necessary to have predictable IPs.
+# (MACs are generated from UUIDs by the vmnet framework.)
+./hyperkit.sh dhcp
 
-# (optional)
-# updates /etc/hosts with currently configured CIDR;
-# then you can use e.g. `ssh master` or `ssh node1` etc.
-# note: if your Mac's vmnet was already used with this CIDR, you will need to
-# adjust the /etc/hosts values manually (according to /var/db/dhcpd_leases),
-# ideally after you launch your k8s nodes.
-# (you should examine the dhcpd_leases first to see if other apps are using it)
+# appends IP/hostname pairs from the NODES config to the /etc/hosts.
+# (the same hosts entries will also be installed into every node)
 ./hyperkit.sh hosts
-
-# (optional)
-# after changing your CIDR, you may want to prune the MAC address associations in
-# the file /var/db/dhcpd_leases (the file must exist / or is later auto-created)
-./hyperkit.sh clean-dhcp
 
 # download, prepare and cache the VM image templates
 ./hyperkit.sh image
 
-# launch the nodes
+# create/launch the nodes
 ./hyperkit.sh master
 ./hyperkit.sh node1
 ./hyperkit.sh nodeN...
@@ -118,19 +103,14 @@ code hyperkit.sh
 ./hyperkit.sh master node1 node2 nodeN...
 
 # ssh to the nodes if necessary (e.g. for manual k8s init)
-# IPs can be found in `/var/db/dhcpd_leases` mapped by MAC address.
 # by default, your `.ssh/id_rsa.pub` key was copied into the VMs' ~/.ssh/authorized_keys
-# (note: this works only after `./hyperkit.sh hosts`, otherwise use IP addresses)
-# use your host username (which is the default), e.g.:
+# uses your host username (which is the default), e.g.:
 ssh master
 ssh node1
 ssh node2
 ...
 
-# TODO
-# perform automated k8s init (will wait for vm to finish init)
-# note: this will checkpoint the nodes just before `kubeadm init`
-# note: this requires your etc/hosts updated
+# performs automated k8s init (will wait for VMs to finish init first)
 ./hyperkit.sh init
 
 # after init, you can do e.g.:
@@ -151,23 +131,21 @@ kube-system   kube-proxy-rtjqv                 1/1     Running   1          4m43
 kube-system   kube-scheduler-master            1/1     Running   1          4m38s
 '
 
-# TODO
 # reboot the nodes
 ./hyperkit.sh reboot
 
 # show info about existing VMs (size, run state)
 ./hyperkit.sh info
-
+'
 NAME    PID    %CPU  %MEM  RSS   STARTED  TIME     DISK  SPARSE  STATUS
 master  36399  0.4   2.1   341M  3:51AM   0:26.30  40G   3.1G    RUNNING
 node1   36418  0.3   2.1   341M  3:51AM   0:25.59  40G   3.1G    RUNNING
 node2   37799  0.4   2.0   333M  3:56AM   0:16.78  40G   3.1G    RUNNING
+'
 
-# TODO
 # shutdown all nodes thru ssh
 .\hyperv.ps1 shutdown
 
-# TODO
 # start all nodes
 .\hyperv.ps1 start
 

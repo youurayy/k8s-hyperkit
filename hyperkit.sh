@@ -80,7 +80,7 @@ DISKDEV="ahci-hd"
 # use for prod/ssh:
 BACKGROUND='>> output.log 2>&1 &'
 
-UUIDS=(
+NODES=(
   "master 24AF0C19-3B96-487C-92F7-584C9932DD96 $CIDR.10 32:a2:b4:36:57:16"
   "node1  B0F97DC5-5E9F-40FC-B829-A1EF974F5640 $CIDR.11 46:5:bd:af:97:f"
   "node2  0BD5B90C-E00C-4E1B-B3CF-117D6FF3C09F $CIDR.12 c6:b7:b1:30:6:fd"
@@ -294,19 +294,19 @@ go-to-scriptdir() {
 }
 
 get_host() {
-  echo ${UUIDS[$1]} | awk '{ print $1 }'
+  echo ${NODES[$1]} | awk '{ print $1 }'
 }
 
 get_uuid() {
-  echo ${UUIDS[$1]} | awk '{ print $2 }'
+  echo ${NODES[$1]} | awk '{ print $2 }'
 }
 
 get_ip() {
-  echo ${UUIDS[$1]} | awk '{ print $3 }'
+  echo ${NODES[$1]} | awk '{ print $3 }'
 }
 
 get_mac() {
-  echo ${UUIDS[$1]} | awk '{ print $4 }'
+  echo ${NODES[$1]} | awk '{ print $4 }'
 }
 
 dhcpd_leases() {
@@ -476,9 +476,8 @@ cat << EOF
       config - show script config vars
        print - print contents of relevant config files
          net - create or reset the vmnet config
-        cidr - update CIDR in the vmnet config
+        dhcp - append to the dhcp registry
        hosts - append node names to etc/hosts
-        dhcp - clean the dhcp registry
        image - download the VM image
       master - create and launch master node
        nodeN - create and launch worker node (node1, node2, ...)
@@ -535,17 +534,11 @@ for arg in "$@"; do
     net)
       create-vmnet
     ;;
-    cidr)
-      sudo plutil \
-        -replace Shared_Net_Address \
-        -string $CIDR.1 \
-        /Library/Preferences/SystemConfiguration/com.apple.vmnet.plist
+    dhcp)
+      dhcpd_leases
     ;;
     hosts)
       echo "$(etc-hosts)" | sudo tee -a /etc/hosts
-    ;;
-    dhcp)
-      dhcpd_leases
     ;;
     image)
       download-image
@@ -577,14 +570,6 @@ for arg in "$@"; do
     ;;
     start)
       # TODO
-
-  cloud-init
-  varname=USERDATA_$DISTRO
-
-cat << EOF > user-data.yaml
-${!varname}
-EOF
-
     ;;
     kill)
       go-to-scriptdir
