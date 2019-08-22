@@ -511,7 +511,7 @@ for arg in "$@"; do
       echo "   SSHPATH: $SSHPATH"
       echo "  IMAGEURL: $IMAGEURL/$IMAGE.$IMGTYPE$ARCHIVE"
       echo "  DISKFILE: $IMAGE.$FORMAT"
-      echo "      CIDR: $CIDR"
+      echo "      CIDR: $CIDR.0/24"
       echo "      CPUS: $CPUS"
       echo "       RAM: $RAM"
       echo "       HDD: $HDD"
