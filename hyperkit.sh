@@ -111,6 +111,8 @@ esac
 
 SSHOPTS="-o LogLevel=ERROR -o StrictHostKeyChecking=false -o UserKnownHostsFile=/dev/null"
 
+DOCKERCLI="https://download.docker.com/mac/static/stable/x86_64/docker-19.03.1.tgz"
+
 # -------------------------CLOUD INIT-----------------------------------
 
 cloud-init() {
@@ -666,6 +668,16 @@ for arg in "$@"; do
         echo ---------------------
         ssh $SSHOPTS $node "date ; sudo chronyc tracking"
       done
+    ;;
+    docker)
+      if ! which docker > /dev/null; then
+        echo "installing docker cli..."
+        curl -L $DOCKERCLI | tar zxvf - --strip 1 -C /usr/local/bin docker/docker
+      fi
+      echo ""
+      echo "exec to use docker on master:"
+      echo ""
+      echo "echo 'export DOCKER_HOST=ssh://master' >> ~/.profile && . ~/.profile"
     ;;
     help)
       help
