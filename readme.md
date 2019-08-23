@@ -30,7 +30,7 @@ chmod +x hyperkit.sh
 
   Commands:
 
-     install - install basic chocolatey packages
+     install - install basic homebrew packages
       config - show script config vars
        print - print contents of relevant config files
          net - create or reset the vmnet config

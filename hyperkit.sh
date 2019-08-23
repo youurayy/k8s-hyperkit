@@ -225,8 +225,7 @@ runcmd:
   - curl -L 'https://github.com/youurayy/runc/releases/download/v1.0.0-rc8-slice-fix/runc-centos.tgz' | tar --backup=numbered -xzf - -C \$(dirname \$(which runc))
   - echo 'sudo tail -f /var/log/messages' > /home/$GUESTUSER/log
   - systemctl start docker
-  - touch /home/$GUESTUSER/.init-completed
-"
+  - touch /home/$GUESTUSER/.init-completed"
 
 USERDATA_ubuntu="\
 $USERDATA_shared
@@ -280,8 +279,7 @@ runcmd:
   # https://github.com/kubernetes/kubernetes/issues/76531
   - curl -L 'https://github.com/youurayy/runc/releases/download/v1.0.0-rc8-slice-fix/runc-ubuntu.tbz' | tar --backup=numbered -xjf - -C \$(dirname \$(which runc))
   - echo 'sudo tail -f /var/log/syslog' > /home/$GUESTUSER/log
-  - touch /home/$GUESTUSER/.init-completed
-"
+  - touch /home/$GUESTUSER/.init-completed"
 }
 
 # ----------------------------------------------------------------------
@@ -366,6 +364,15 @@ start-machine() {
   fi
 }
 
+write-user-data() {
+  cloud-init
+  varname=USERDATA_$DISTRO
+
+cat << EOF > $1
+${!varname}
+EOF
+}
+
 create-machine() {
 
   if [ -z $UUID ] || [ -z $NAME ] || [ -z $CPUS ] || [ -z $RAM ] || [ -z $DISK ]; then
@@ -390,12 +397,7 @@ instance-id: id-$NAME
 local-hostname: $NAME
 EOF
 
-  cloud-init
-  varname=USERDATA_$DISTRO
-
-cat << EOF > cidata/user-data
-${!varname}
-EOF
+  write-user-data "cidata/user-data"
 
   rm -f $ISO
   hdiutil makehybrid -iso -joliet -o $ISO cidata
@@ -572,7 +574,7 @@ for arg in "$@"; do
       find $WORKDIR/* -maxdepth 0 -type d | while read node; do node-info "$node"; done } | column -ts $'\t'
     ;;
     init)
-
+      go-to-scriptdir
       allnodes=( $(get-all-nodes) )
       workernodes=( $(get-worker-nodes) )
 
@@ -678,6 +680,10 @@ for arg in "$@"; do
       echo "exec to use docker on master:"
       echo ""
       echo "echo 'export DOCKER_HOST=ssh://master' >> ~/.profile && . ~/.profile"
+    ;;
+    iso)
+      go-to-scriptdir
+      write-user-data "${DISTRO}.yaml"
     ;;
     help)
       help
