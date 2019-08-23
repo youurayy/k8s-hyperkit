@@ -388,12 +388,16 @@ instance-id: id-$NAME
 local-hostname: $NAME
 EOF
 
+  write-user-data "cidata/user-data"
+
+write-user-data() {
   cloud-init
   varname=USERDATA_$DISTRO
 
 cat << EOF > cidata/user-data
 ${!varname}
 EOF
+}
 
   rm -f $ISO
   hdiutil makehybrid -iso -joliet -o $ISO cidata
@@ -570,7 +574,7 @@ for arg in "$@"; do
       find $WORKDIR/* -maxdepth 0 -type d | while read node; do node-info "$node"; done } | column -ts $'\t'
     ;;
     init)
-
+      go-to-scriptdir
       allnodes=( $(get-all-nodes) )
       workernodes=( $(get-worker-nodes) )
 
@@ -666,6 +670,10 @@ for arg in "$@"; do
         echo ---------------------
         ssh $SSHOPTS $node "date ; sudo chronyc tracking"
       done
+    ;;
+    iso)
+      go-to-scriptdir
+      write-user-data "${$DISTRO}.yaml"
     ;;
     help)
       help
