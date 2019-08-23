@@ -222,7 +222,7 @@ runcmd:
   # https://github.com/kubernetes/kubeadm/issues/954
   - echo 'exclude=kube*' >> /etc/yum.repos.d/kubernetes.repo
   # https://github.com/kubernetes/kubernetes/issues/76531
-  - curl -L 'https://github.com/youurayy/runc/releases/download/v1.0.0-rc8-slice-fix/runc-centos.tgz' | tar --backup=numbered -xzf - -C \$(dirname \$(which runc))
+  - curl -L 'https://github.com/youurayy/runc/releases/download/v1.0.0-rc8-slice-fix-2/runc-centos.tgz' | tar --backup=numbered -xzf - -C \$(dirname \$(which runc))
   - echo 'sudo tail -f /var/log/messages' > /home/$GUESTUSER/log
   - systemctl start docker
   - touch /home/$GUESTUSER/.init-completed"
@@ -277,7 +277,7 @@ runcmd:
   # https://github.com/kubernetes/kubeadm/issues/954
   - apt-mark hold kubeadm kubelet
   # https://github.com/kubernetes/kubernetes/issues/76531
-  - curl -L 'https://github.com/youurayy/runc/releases/download/v1.0.0-rc8-slice-fix/runc-ubuntu.tbz' | tar --backup=numbered -xjf - -C \$(dirname \$(which runc))
+  - curl -L 'https://github.com/youurayy/runc/releases/download/v1.0.0-rc8-slice-fix-2/runc-ubuntu.tbz' | tar --backup=numbered -xjf - -C \$(dirname \$(which runc))
   - echo 'sudo tail -f /var/log/syslog' > /home/$GUESTUSER/log
   - touch /home/$GUESTUSER/.init-completed"
 }
