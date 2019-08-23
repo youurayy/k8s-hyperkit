@@ -211,6 +211,7 @@ packages:
   - kubectl
 
 runcmd:
+  - echo 'sudo tail -f /var/log/messages' > /home/$GUESTUSER/log
   - cat /tmp/append-etc-hosts >> /etc/hosts
   - setenforce 0
   - sed -i 's/^SELINUX=enforcing\$/SELINUX=permissive/' /etc/selinux/config
@@ -223,7 +224,6 @@ runcmd:
   - echo 'exclude=kube*' >> /etc/yum.repos.d/kubernetes.repo
   # https://github.com/kubernetes/kubernetes/issues/76531
   - curl -L 'https://github.com/youurayy/runc/releases/download/v1.0.0-rc8-slice-fix-2/runc-centos.tgz' | tar --backup=numbered -xzf - -C \$(dirname \$(which runc))
-  - echo 'sudo tail -f /var/log/messages' > /home/$GUESTUSER/log
   - systemctl start docker
   - touch /home/$GUESTUSER/.init-completed"
 
@@ -270,6 +270,7 @@ packages:
   - kubeadm
 
 runcmd:
+  - echo 'sudo tail -f /var/log/syslog' > /home/$GUESTUSER/log
   - systemctl stop kubelet
   - cat /tmp/append-etc-hosts >> /etc/hosts
   - chmod o+r /lib/systemd/system/kubelet.service
@@ -278,7 +279,6 @@ runcmd:
   - apt-mark hold kubeadm kubelet
   # https://github.com/kubernetes/kubernetes/issues/76531
   - curl -L 'https://github.com/youurayy/runc/releases/download/v1.0.0-rc8-slice-fix-2/runc-ubuntu.tbz' | tar --backup=numbered -xjf - -C \$(dirname \$(which runc))
-  - echo 'sudo tail -f /var/log/syslog' > /home/$GUESTUSER/log
   - touch /home/$GUESTUSER/.init-completed"
 }
 
