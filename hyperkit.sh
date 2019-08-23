@@ -413,7 +413,7 @@ EOF
   fi
 
 cat << EOF > cmdline
-hyperkit -A \
+exec hyperkit -A \
   -H \
   -U $UUID \
   -m $RAM \
@@ -600,13 +600,14 @@ for arg in "$@"; do
 
       for node in ${workernodes[@]}; do
         echo "executing on $node: $joincmd"
-        ssh $SSHOPTS $node sudo $joincmd
+        ssh $SSHOPTS $node "sudo $joincmd < /dev/null"
       done
 
       mkdir -p ~/.kube
-      scp $SSHOPTS master:.kube/config ~/.kube/config.hyperv
+      scp $SSHOPTS master:.kube/config ~/.kube/config.hyperkit
 
-      hyperctl="kubectl --kubeconfig=~/.kube/config.hyperv"
+      hyperalias="kubectl --kubeconfig ~/.kube/config.hyperkit"
+      hyperctl="kubectl --kubeconfig $HOME/.kube/config.hyperkit"
 
       echo ""
 
@@ -616,7 +617,7 @@ for arg in "$@"; do
       echo ""
       echo "to setup bash alias, exec:"
       echo ""
-      echo "echo \"alias hyperctl='echo $hyperctl' > ~/.profile\""
+      echo "echo \"alias hyperctl='$hyperalias'\" >> ~/.profile"
       echo "source ~/.profile"
     ;;
     reboot)
@@ -651,6 +652,20 @@ for arg in "$@"; do
     delete)
       go-to-scriptdir
       find $WORKDIR/* -maxdepth 0 -type d -exec rm -rf {} ';'
+    ;;
+    time)
+      allnodes=( $(get-all-nodes) )
+      for node in ${allnodes[@]}; do
+        echo ---------------------
+        ssh $SSHOPTS $node "date ; sudo chronyc makestep ; date"
+      done
+    ;;
+    track)
+      allnodes=( $(get-all-nodes) )
+      for node in ${allnodes[@]}; do
+        echo ---------------------
+        ssh $SSHOPTS $node "date ; sudo chronyc tracking"
+      done
     ;;
     help)
       help
