@@ -262,6 +262,7 @@ apt:
 package_upgrade: true
 
 packages:
+  - chrony
   - docker-ce
   - docker-ce-cli
   - containerd.io
@@ -271,6 +272,8 @@ packages:
 
 runcmd:
   - echo 'sudo tail -f /var/log/syslog' > /home/$GUESTUSER/log
+  - systemctl mask --now systemd-timesyncd
+  - systemctl enable --now chrony
   - systemctl stop kubelet
   - cat /tmp/append-etc-hosts >> /etc/hosts
   - chmod o+r /lib/systemd/system/kubelet.service
