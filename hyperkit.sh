@@ -659,6 +659,7 @@ for arg in "$@"; do
     ;;
     time)
       allnodes=( $(get-all-nodes) )
+      echo "local: $(date)"
       for node in ${allnodes[@]}; do
         echo ---------------------
         ssh $SSHOPTS $node "date ; sudo chronyc makestep ; date"
