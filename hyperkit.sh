@@ -661,14 +661,14 @@ for arg in "$@"; do
       allnodes=( $(get-all-nodes) )
       echo "local: $(date)"
       for node in ${allnodes[@]}; do
-        echo ---------------------
+        echo ---------------------$node
         ssh $SSHOPTS $node "date ; sudo chronyc makestep ; date"
       done
     ;;
     track)
       allnodes=( $(get-all-nodes) )
       for node in ${allnodes[@]}; do
-        echo ---------------------
+        echo ---------------------$node
         ssh $SSHOPTS $node "date ; sudo chronyc tracking"
       done
     ;;
