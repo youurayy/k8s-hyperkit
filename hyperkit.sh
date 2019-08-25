@@ -311,7 +311,7 @@ get_mac() {
   echo ${NODES[$1]} | awk '{ print $4 }'
 }
 
-dhcpd_leases() {
+dhcpd-leases() {
 cat << EOF | sudo tee -a /var/db/dhcpd_leases
 $(for i in `seq 9 -1 0`; do echo "{
         name=$(get_host $i)
@@ -484,6 +484,15 @@ get-worker-nodes() {
     while read node; do echo -n " "`basename $node`; done
 }
 
+exec-on-all-nodes() {
+  go-to-scriptdir
+  allnodes=( $(get-all-nodes) )
+  for node in ${allnodes[@]}; do
+    echo ---------------------$node
+    ssh $SSHOPTS $node $1
+  done
+}
+
 help() {
 cat << EOF
   Practice real Kubernetes configurations on a local multi-node cluster.
@@ -556,7 +565,7 @@ for arg in "$@"; do
       create-vmnet
     ;;
     dhcp)
-      dhcpd_leases
+      dhcpd-leases
     ;;
     hosts)
       echo "$(etc-hosts)" | sudo tee -a /etc/hosts
@@ -628,16 +637,10 @@ for arg in "$@"; do
       echo "source ~/.profile"
     ;;
     reboot)
-      allnodes=( $(get-all-nodes) )
-      for node in ${allnodes[@]}; do
-        ssh $SSHOPTS $node sudo reboot
-      done
+      exec-on-all-nodes "sudo reboot"
     ;;
     shutdown)
-      allnodes=( $(get-all-nodes) )
-      for node in ${allnodes[@]}; do
-        ssh $SSHOPTS $node sudo shutdown -h now
-      done
+      exec-on-all-nodes "sudo shutdown -h now"
     ;;
     stop)
       go-to-scriptdir
@@ -660,20 +663,24 @@ for arg in "$@"; do
       go-to-scriptdir
       find $WORKDIR/* -maxdepth 0 -type d -exec rm -rf {} ';'
     ;;
+    sleepwatcher)
+      brew install sleepwatcher
+      brew services start sleepwatcher
+      echo "$BASEDIR/hyperkit.sh hwclock" >> ~/.wakeup
+      chmod +x ~/.wakeup
+      echo "time sync added to ~/.wakeup"
+      echo ""
+      cat ~/.wakeup
+    ;;
+    hwclock)
+      exec-on-all-nodes "date ; sudo hwclock -s; date"
+    ;;
     time)
-      allnodes=( $(get-all-nodes) )
       echo "local: $(date)"
-      for node in ${allnodes[@]}; do
-        echo ---------------------$node
-        ssh $SSHOPTS $node "date ; sudo chronyc makestep ; date"
-      done
+      exec-on-all-nodes "date ; sudo chronyc makestep ; date"
     ;;
     track)
-      allnodes=( $(get-all-nodes) )
-      for node in ${allnodes[@]}; do
-        echo ---------------------$node
-        ssh $SSHOPTS $node "date ; sudo chronyc tracking"
-      done
+      exec-on-all-nodes "date ; sudo chronyc tracking"
     ;;
     docker)
       if ! which docker > /dev/null; then
