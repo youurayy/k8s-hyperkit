@@ -201,6 +201,7 @@ package_upgrade: true
 
 packages:
   - yum-utils
+  - cifs-utils
   - device-mapper-persistent-data
   - lvm2
   - docker-ce
@@ -262,6 +263,7 @@ apt:
 package_upgrade: true
 
 packages:
+  - cifs-utils
   - chrony
   - docker-ce
   - docker-ce-cli
@@ -519,6 +521,10 @@ cat << EOF
        start - start the VMs
         kill - force-stop the VMs
       delete - delete the VM files
+         iso - write cloud config data into a local yaml
+    timesync - setup sleepwatcher time sync
+      docker - setup local docker with the master node
+       share - setup local fs sharing with docker on master
 
   For more info, see: https://github.com/youurayy/k8s-hyperkit
 EOF
@@ -663,7 +669,7 @@ for arg in "$@"; do
       go-to-scriptdir
       find $WORKDIR/* -maxdepth 0 -type d -exec rm -rf {} ';'
     ;;
-    sleepwatcher)
+    timesync)
       brew install sleepwatcher
       brew services start sleepwatcher
       echo "$BASEDIR/hyperkit.sh hwclock" >> ~/.wakeup
@@ -693,46 +699,40 @@ for arg in "$@"; do
       echo "echo 'export DOCKER_HOST=ssh://master' >> ~/.profile && . ~/.profile"
     ;;
     share)
-      # 1. map local:/Users/user into master:/Users/user
-      #      - 1. share the dir on mac
-      #      - 2. mount the dir on linux
-      # 2. use e.g.: docker run -it -v /Users/user/subdir:/Users/user/subdir r-base bash
-      # 3. in the image, e.g.: cd /Users/user/subdir
+      echo "1. make sure File Sharing is enabled on your Mac:"
+      echo "  System Preferences -> Sharing -> "
+      echo "       -> [x] File Sharing"
+      echo "       -> Options..."
+      echo "         -> [x] Share files and folders using SMB"
+      echo "         -> Windows File Sharing: [x] Your Account"
+      echo
 
-      # TODO install cifs-utils  (maybe also samba-client)
-
-      # sudo sharing -a $HOME -s 001 -g 000 -n docker
-
-      if ! ssh $SSHOPTS master \
-        "sudo mkdir -p $HOME && \
-        sudo mount -t cifs //$CIDR.1/docker $HOME \
-          -o sec=ntlm,username=$GUESTUSER,vers=3.0,sec=ntlmv2,noperm"; then
-
-        # TODO add "remove default share"
-        # TODO add "turn on SMB file sharing"
-
-        echo "System Preferences -> Sharing -> Options -> Windows File Sharing"
-
+      if sharing -l | grep docker > /dev/null; then
+        echo "2. not setting up host $HOME -> /docker share, already present..."
+        echo
       else
-
-        echo "adding fstab entry..."
-
-        # ssh master \
-        #   sudo echo "" >> /etc/fstab
-
+        echo "2. setting up host $HOME -> /docker share..."
+        echo
+        cmd="sudo sharing -a $HOME -s 001 -g 000 -n docker"
+        echo $cmd
+        echo
+        $cmd
+        echo
       fi
 
-      # sudo mount -t cifs //10.10.0.1/docker /Users/juraj -o sec=ntlm,username=juraj,vers=3.0,sec=ntlmv2,noperm
+      cmd="sudo mkdir -p $HOME && sudo mount -t cifs //$CIDR.1/docker $HOME -o sec=ntlm,username=$GUESTUSER,vers=3.0,sec=ntlmv2,noperm"
+      echo $cmd | pbcopy
+      echo "3. "$cmd
+      echo "  ^ copied to the clipboard, paste & execute on master:"
+      echo "    (just press CMD+V, <enter your Mac password>, ENTER, CTRL+D)"
+      echo
+      ssh $SSHOPTS $GUESTUSER@master
 
-      # smbclient //10.10.0.1/docker -U juraj
-
-      # noauto,
-      #   -o noauto,user,username=$GUESTUSER,noperm,
-
-      #   sec=ntlm
-
-      #   uid=ct,gid=ct,sec=ntlmssp,nounix
-
+      echo
+      cmd="docker run -it -v $PWD:$PWD r-base ls -l $PWD"
+      echo $cmd | pbcopy
+      echo "4. "$cmd
+      echo "  ^ copied to the clipboard, paste & execute locally to test the sharing"
     ;;
     iso)
       go-to-scriptdir

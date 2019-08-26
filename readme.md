@@ -1,6 +1,6 @@
 # Kubernetes Cluster on Hyperkit
 
-Practice real Kubernetes configurations on a local multi-node cluster.
+Real Kubernetes (and Docker) on the localhost.
 
 Tested on: Hyperkit 0.20190802 on macOS 10.14.5 w/ APFS, guest images Centos 1907 and Ubuntu 18.04.
 
@@ -47,6 +47,10 @@ chmod +x hyperkit.sh
        start - start the VMs
         kill - force-stop the VMs
       delete - delete the VM files
+         iso - write cloud config data into a local yaml
+    timesync - setup sleepwatcher time sync
+      docker - setup local docker with the master node
+       share - setup local fs sharing with docker on master
 '
 
 # performs `brew install hyperkit qemu kubernetes-cli kubernetes-helm`.
