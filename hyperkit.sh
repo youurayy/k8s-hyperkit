@@ -692,6 +692,48 @@ for arg in "$@"; do
       echo ""
       echo "echo 'export DOCKER_HOST=ssh://master' >> ~/.profile && . ~/.profile"
     ;;
+    share)
+      # 1. map local:/Users/user into master:/Users/user
+      #      - 1. share the dir on mac
+      #      - 2. mount the dir on linux
+      # 2. use e.g.: docker run -it -v /Users/user/subdir:/Users/user/subdir r-base bash
+      # 3. in the image, e.g.: cd /Users/user/subdir
+
+      # TODO install cifs-utils  (maybe also samba-client)
+
+      # sudo sharing -a $HOME -s 001 -g 000 -n docker
+
+      if ! ssh $SSHOPTS master \
+        "sudo mkdir -p $HOME && \
+        sudo mount -t cifs //$CIDR.1/docker $HOME \
+          -o sec=ntlm,username=$GUESTUSER,vers=3.0,sec=ntlmv2,noperm"; then
+
+        # TODO add "remove default share"
+        # TODO add "turn on SMB file sharing"
+
+        echo "System Preferences -> Sharing -> Options -> Windows File Sharing"
+
+      else
+
+        echo "adding fstab entry..."
+
+        # ssh master \
+        #   sudo echo "" >> /etc/fstab
+
+      fi
+
+      # sudo mount -t cifs //10.10.0.1/docker /Users/juraj -o sec=ntlm,username=juraj,vers=3.0,sec=ntlmv2,noperm
+
+      # smbclient //10.10.0.1/docker -U juraj
+
+      # noauto,
+      #   -o noauto,user,username=$GUESTUSER,noperm,
+
+      #   sec=ntlm
+
+      #   uid=ct,gid=ct,sec=ntlmssp,nounix
+
+    ;;
     iso)
       go-to-scriptdir
       write-user-data "${DISTRO}.yaml"
