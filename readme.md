@@ -1,6 +1,6 @@
 ### Project has moved to: https://github.com/youurayy/hyperctl
 
-# Kubernetes Cluster on Hyperkit
+# ~Kubernetes Cluster on Hyperkit~
 
 Real Kubernetes (and Docker) on the localhost.
 
